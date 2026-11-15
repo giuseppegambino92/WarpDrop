@@ -105,6 +105,8 @@ docker run -p 47900:47900/tcp -p 47900:47900/udp warp-signal
 ```
 Poi usa `ws://<host>:47900` (oppure `wss://` dietro un proxy TLS) come URL del relay.
 
+Variabili d'ambiente facoltative: `WARP_SIGNAL_TRUST_PROXY=1` dietro un reverse proxy (i limiti per IP usano `X-Forwarded-For`), `WARP_SIGNAL_MAX_SESSIONS`, `WARP_SIGNAL_MAX_CONNS_PER_IP`, `WARP_SIGNAL_MAX_SESSION_GB`. `WARP_SIGNAL_LEGACY_BIND=1` serve via relay anche le app v1.0.0 (il loro collegamento UDP non è autenticato: disattivalo quando sono aggiornate).
+
 ## Struttura del repository
 
 ```

@@ -369,24 +369,44 @@ fn verify(state: &State, roots: &[[u8; 32]]) -> Result<()> {
 
 /// Moves the top-level items into the download directory, each under a name
 /// that is free at that instant (atomic no-replace rename, never
-/// overwriting). All or nothing: if one move fails, the items already moved
-/// go back into staging.
+/// overwriting).
+///
+/// Each item's move is atomic; the set is all or nothing on a best-effort
+/// basis: if one move fails, the items already moved are renamed back into
+/// staging. Should that rollback itself fail (the download folder vanished,
+/// a disk error), those items stay saved and the error names them, so
+/// nothing is lost or silently duplicated; the rest stays staged.
 fn place(state: &State, download_dir: &Path) -> Result<Vec<String>> {
+    place_with(state, download_dir, fsx::move_unique, fsx::rename_noreplace)
+}
+
+fn place_with(
+    state: &State,
+    download_dir: &Path,
+    move_in: impl Fn(&Path, &Path, &str) -> std::io::Result<PathBuf>,
+    move_back: impl Fn(&Path, &Path) -> std::io::Result<()>,
+) -> Result<Vec<String>> {
     std::fs::create_dir_all(download_dir).context("creating download directory")?;
     let tops = state.manifest.entries.iter().zip(&state.paths).filter(|(e, _)| !e.path.contains('/')).map(|(_, rel)| rel);
     let mut moved: Vec<(PathBuf, PathBuf)> = vec![];
     for rel in tops {
         let from = state.stage.join(rel);
         let name = rel.to_string_lossy();
-        match fsx::move_unique(&from, download_dir, &name) {
+        match move_in(&from, download_dir, &name) {
             Ok(to) => moved.push((from, to)),
             Err(e) => {
+                let mut stuck = vec![];
                 for (from, to) in moved.iter().rev() {
-                    if let Err(e) = fsx::rename_noreplace(to, from) {
+                    if let Err(e) = move_back(to, from) {
                         tracing::warn!("could not roll back {}: {e}", to.display());
+                        stuck.push(to.display().to_string());
                     }
                 }
-                return Err(WarpError::io(format!("cannot save {name} in {}: {e}", download_dir.display())).into());
+                let mut msg = format!("cannot save {name} in {}: {e}", download_dir.display());
+                if !stuck.is_empty() {
+                    msg += &format!(" (already saved and left in place: {})", stuck.join(", "));
+                }
+                return Err(WarpError::io(msg).into());
             }
         }
     }
@@ -465,5 +485,37 @@ mod tests {
         assert!(matches!(err.downcast_ref::<WarpError>(), Some(WarpError::Io { .. })), "{err:#}");
         assert!(!dl.join("first.txt").exists(), "first item rolled back");
         assert_eq!(std::fs::read(stage.join("first.txt")).unwrap(), b"1", "and kept in staging");
+    }
+
+    #[test]
+    fn a_failed_rollback_is_reported_and_loses_nothing() {
+        let d = tempfile::tempdir().unwrap();
+        let (stage, dl) = (d.path().join("stage"), d.path().join("dl"));
+        std::fs::create_dir_all(&stage).unwrap();
+        let st = state(stage.clone(), vec![file("a.txt"), file("b.txt"), file("c.txt")]);
+        for n in ["a.txt", "b.txt", "c.txt"] {
+            std::fs::write(stage.join(n), n).unwrap();
+        }
+        // "c.txt" fails to move in; rolling back "b.txt" fails too.
+        let move_in = |from: &Path, dir: &Path, name: &str| {
+            if name == "c.txt" {
+                return Err(std::io::Error::other("disk error"));
+            }
+            fsx::move_unique(from, dir, name)
+        };
+        let move_back = |to: &Path, from: &Path| {
+            if to.ends_with("b.txt") {
+                return Err(std::io::Error::other("disk error"));
+            }
+            fsx::rename_noreplace(to, from)
+        };
+        let err = format!("{:#}", place_with(&st, &dl, move_in, move_back).unwrap_err());
+        assert!(err.contains("cannot save c.txt") && err.contains("left in place") && err.contains("b.txt"), "{err}");
+        // Every file is in exactly one place.
+        assert_eq!(std::fs::read(stage.join("a.txt")).unwrap(), b"a.txt", "rolled back");
+        assert!(!dl.join("a.txt").exists());
+        assert_eq!(std::fs::read(dl.join("b.txt")).unwrap(), b"b.txt", "reported as saved");
+        assert!(!stage.join("b.txt").exists());
+        assert_eq!(std::fs::read(stage.join("c.txt")).unwrap(), b"c.txt", "still staged");
     }
 }

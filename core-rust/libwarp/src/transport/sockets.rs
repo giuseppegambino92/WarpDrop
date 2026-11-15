@@ -85,8 +85,8 @@ impl RelaySocket {
     /// address the relay observes (learned with a probe) when the relay handed
     /// out a bind key, otherwise with an empty DATA packet (older relays).
     pub async fn bind_on_relay(&self) -> io::Result<()> {
-        let legacy = relay_header(RELAY_DATA, &self.session, self.side);
         let Some(key) = self.bind_key else {
+            let legacy = relay_header(RELAY_DATA, &self.session, self.side);
             for _ in 0..3 {
                 self.io.send_to(&legacy, self.relay).await?;
             }
@@ -111,9 +111,8 @@ impl RelaySocket {
                 }
             }
         }
-        // Not confirmed (packet loss): the relay still accepts a first,
-        // unauthenticated binding, and NEED_BIND repairs it later.
-        self.io.send_to(&legacy, self.relay).await?;
+        // Not confirmed (packet loss): the relay answers our first QUIC
+        // packets with NEED_BIND, and `rebind` completes the binding then.
         Ok(())
     }
 

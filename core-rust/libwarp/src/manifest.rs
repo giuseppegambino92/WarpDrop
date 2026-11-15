@@ -264,11 +264,20 @@ pub fn safe_join(root: &Path, rel: &str) -> Result<PathBuf> {
 }
 
 /// Upper bounds for an incoming manifest, checked before anything is allocated
-/// per entry or per chunk.
+/// per entry or per chunk. Together with the 64 MiB cap on control messages
+/// they are the receiver's memory budget for one transfer:
+/// * per-chunk state is 33 bytes (`Option<[u8; 32]>`), so `MAX_TOTAL_CHUNKS`
+///   keeps it under 70 MiB;
+/// * per-entry state (manifest, local path, lookup tables) stays in the low
+///   hundreds of MiB even for `MAX_ENTRIES` entries with long names.
+///
+/// The receiver also refuses, before accepting, anything that does not fit in
+/// its free disk space.
 pub const MAX_ENTRIES: usize = 1_000_000;
 const MAX_PATH_BYTES: usize = 4096;
-/// 1 PiB. The receiver additionally checks free disk space before accepting.
-pub const MAX_TOTAL_BYTES: u64 = 1 << 50;
+/// 2²¹ chunks of 4 MiB = 8 TiB per transfer.
+pub const MAX_TOTAL_CHUNKS: u64 = 1 << 21;
+pub const MAX_TOTAL_BYTES: u64 = MAX_TOTAL_CHUNKS * crate::hashing::CHUNK_SIZE;
 
 pub fn validate(m: &Manifest) -> Result<()> {
     if m.entries.is_empty() {
@@ -277,16 +286,13 @@ pub fn validate(m: &Manifest) -> Result<()> {
     if m.entries.len() > MAX_ENTRIES {
         bail!("too many entries in manifest ({})", m.entries.len());
     }
-    let mut total: u64 = 0;
+    let (mut bytes, mut chunks): (u64, u64) = (0, 0);
     for e in &m.entries {
         if e.path.len() > MAX_PATH_BYTES {
             bail!("path too long in manifest");
         }
-        // Chunk indices travel as u32.
-        if e.chunks() > u32::MAX as u64 {
-            bail!("file too large: {}", e.path);
-        }
-        total = total.checked_add(e.size()).filter(|t| *t <= MAX_TOTAL_BYTES).ok_or_else(|| anyhow!("transfer too large"))?;
+        bytes = bytes.checked_add(e.size()).filter(|b| *b <= MAX_TOTAL_BYTES).ok_or_else(|| anyhow!("transfer too large"))?;
+        chunks = chunks.checked_add(e.chunks()).filter(|c| *c <= MAX_TOTAL_CHUNKS).ok_or_else(|| anyhow!("transfer too large"))?;
     }
     local_paths(m).map(|_| ())
 }
@@ -445,6 +451,7 @@ mod tests {
         let two = vec![huge(MAX_TOTAL_BYTES), Entry { path: "b".into(), kind: EntryKind::File { size: 1, mtime_ms: 0, executable: false } }];
         assert!(validate(&Manifest { entries: two }).is_err(), "sum overflow");
         assert!(validate(&Manifest { entries: vec![huge(10 << 30)] }).is_ok());
+        assert!(validate(&Manifest { entries: vec![huge(MAX_TOTAL_BYTES)] }).is_ok(), "exactly at the budget");
     }
 
     #[test]

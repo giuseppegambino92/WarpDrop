@@ -1,5 +1,14 @@
 //! Small filesystem primitives the receiver needs and `std` doesn't offer:
 //! a rename that never replaces an existing name, and free-space queries.
+//!
+//! Guarantees, and where they stop:
+//! * On APFS/HFS+, ext4/btrfs/xfs/f2fs (Android), NTFS and ReFS the
+//!   "is the name free?" check and the rename are one atomic system call.
+//! * Elsewhere (FAT/exFAT, some network and FUSE filesystems) `fallback`
+//!   is used: files are still atomic (a hard link cannot replace), folders
+//!   are check-then-rename, so a folder created by another process in that
+//!   instant could be replaced if it is empty (POSIX `rename` never replaces
+//!   a non-empty folder) or make the move fail, which `move_unique` reports.
 
 use std::io;
 use std::path::{Path, PathBuf};
@@ -171,6 +180,25 @@ mod tests {
         std::fs::create_dir(&x).unwrap();
         std::fs::create_dir(&y).unwrap();
         assert_eq!(rename_noreplace(&x, &y).unwrap_err().kind(), io::ErrorKind::AlreadyExists);
+    }
+
+    #[test]
+    fn fallback_never_replaces_either() {
+        let d = tempfile::tempdir().unwrap();
+        let p = |n: &str| d.path().join(n);
+        std::fs::write(p("f1"), b"1").unwrap();
+        std::fs::write(p("f2"), b"2").unwrap();
+        assert_eq!(fallback(&p("f1"), &p("f2")).unwrap_err().kind(), io::ErrorKind::AlreadyExists);
+        assert_eq!(std::fs::read(p("f2")).unwrap(), b"2");
+        fallback(&p("f1"), &p("f3")).unwrap();
+        assert!(!p("f1").exists() && std::fs::read(p("f3")).unwrap() == b"1");
+
+        std::fs::create_dir(p("d1")).unwrap();
+        std::fs::write(p("d1/x"), b"x").unwrap();
+        std::fs::create_dir(p("d2")).unwrap();
+        assert_eq!(fallback(&p("d1"), &p("d2")).unwrap_err().kind(), io::ErrorKind::AlreadyExists);
+        fallback(&p("d1"), &p("d3")).unwrap();
+        assert!(p("d3/x").exists() && !p("d1").exists());
     }
 
     #[test]

@@ -202,3 +202,54 @@ async fn connections_per_ip_are_capped() {
     tokio::time::sleep(Duration::from_millis(200)).await;
     assert!(tokio_tungstenite::connect_async(format!("ws://{relay}/v1/ws")).await.is_ok(), "slot freed");
 }
+
+async fn relay_with(cfg: warp_signal::Config) -> SocketAddr {
+    loop {
+        let tcp = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = tcp.local_addr().unwrap();
+        if let Ok(udp) = UdpSocket::bind(addr).await {
+            tokio::spawn(warp_signal::serve(tcp, udp, cfg));
+            return addr;
+        }
+    }
+}
+
+#[tokio::test]
+async fn unauthenticated_first_binding_is_refused_by_default() {
+    let relay = warp_signal::spawn_local().await.unwrap();
+    let (_l, a, _d, b) = pair(relay, 4).await;
+    let (sa, sb, attacker) = (udp().await, udp().await, udp().await);
+    bind(&sb, relay, &b).await;
+
+    // Before A binds, someone with the session id tries to claim side A.
+    let pkt = data(&a, &[0u8; 64]);
+    attacker.send_to(&pkt, relay).await.unwrap();
+    assert_eq!(recv_udp(&attacker, 1000).await.unwrap()[4], RELAY_NEED_BIND);
+    sb.send_to(&data(&b, b"for A"), relay).await.unwrap();
+    assert!(recv_udp(&attacker, 300).await.is_none(), "attacker never receives A's traffic");
+
+    // The real A, still unbound, gets NEED_BIND for its first QUIC packet,
+    // binds with its key, and from then on receives.
+    sa.send_to(&data(&a, &[0u8; 64]), relay).await.unwrap();
+    assert_eq!(recv_udp(&sa, 1000).await.unwrap()[4], RELAY_NEED_BIND);
+    bind(&sa, relay, &a).await;
+    sb.send_to(&data(&b, b"hi A"), relay).await.unwrap();
+    assert!(recv_udp(&sa, 1000).await.unwrap().ends_with(b"hi A"));
+}
+
+#[tokio::test]
+async fn legacy_binding_is_an_explicit_opt_in() {
+    let relay = relay_with(warp_signal::Config { legacy_bind: true, ..Default::default() }).await;
+    let (_l, a, _d, b) = pair(relay, 5).await;
+    let (old_a, sb, attacker) = (udp().await, udp().await, udp().await);
+    bind(&sb, relay, &b).await;
+    // A v1.0.0 client binds with an empty DATA packet…
+    old_a.send_to(&relay_header(RELAY_DATA, &a.session, a.side), relay).await.unwrap();
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    sb.send_to(&data(&b, b"old client"), relay).await.unwrap();
+    assert!(recv_udp(&old_a, 1000).await.unwrap().ends_with(b"old client"));
+    // …and still nobody can move it without the key.
+    attacker.send_to(&data(&a, &[0u8; 64]), relay).await.unwrap();
+    sb.send_to(&data(&b, b"still old"), relay).await.unwrap();
+    assert!(recv_udp(&old_a, 1000).await.unwrap().ends_with(b"still old"));
+}

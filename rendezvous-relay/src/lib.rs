@@ -18,7 +18,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Notify};
 
 const MAGIC: &[u8; 4] = b"WRP1";
 const PROBE: u8 = 1;
@@ -62,6 +62,10 @@ pub struct Config {
     pub ws_idle: Duration,
     /// Take the client IP from `X-Forwarded-For` (only behind a trusted proxy).
     pub trust_proxy: bool,
+    /// Let a side bind with its first unauthenticated DATA packet, as v1.0.0
+    /// clients (which have no bind key) do. Off by default: then only a BIND
+    /// with a valid MAC can set or move an address.
+    pub legacy_bind: bool,
 }
 
 impl Default for Config {
@@ -77,6 +81,7 @@ impl Default for Config {
             connects_per_minute: 30,
             ws_idle: Duration::from_secs(90),
             trust_proxy: false,
+            legacy_bind: false,
         }
     }
 }
@@ -94,7 +99,9 @@ impl Config {
         if let Some(n) = num("WARP_SIGNAL_MAX_CONNS_PER_IP") {
             c.max_conns_per_ip = n as usize;
         }
-        c.trust_proxy = matches!(std::env::var("WARP_SIGNAL_TRUST_PROXY").as_deref(), Ok("1" | "true"));
+        let flag = |k: &str| matches!(std::env::var(k).as_deref(), Ok("1" | "true"));
+        c.trust_proxy = flag("WARP_SIGNAL_TRUST_PROXY");
+        c.legacy_bind = flag("WARP_SIGNAL_LEGACY_BIND");
         c
     }
 }
@@ -133,11 +140,35 @@ enum ServerMsg {
     },
 }
 
-type Tx = mpsc::Sender<ServerMsg>;
+/// Handle to one WebSocket client: its bounded outgoing queue, and a way to
+/// disconnect it.
+#[derive(Clone)]
+struct Tx {
+    queue: mpsc::Sender<ServerMsg>,
+    kick: Arc<Notify>,
+}
 
-/// Queues a message for a client; drops it if that client is not keeping up.
-fn push(tx: &Tx, m: ServerMsg) {
-    let _ = tx.try_send(m);
+impl Tx {
+    /// Informational messages (errors): dropped if the client's queue is full.
+    fn notify(&self, m: ServerMsg) {
+        let _ = self.queue.try_send(m);
+    }
+
+    /// Messages a session cannot work without (`Paired`, `Signal`). Never
+    /// dropped silently: if the client is not draining its queue it is
+    /// disconnected (it reconnects and re-registers), and the caller learns
+    /// that delivery failed.
+    fn deliver(&self, m: ServerMsg) -> bool {
+        match self.queue.try_send(m) {
+            Ok(()) => true,
+            Err(mpsc::error::TrySendError::Full(_)) => {
+                tracing::debug!("client queue full, disconnecting it");
+                self.kick.notify_one();
+                false
+            }
+            Err(mpsc::error::TrySendError::Closed(_)) => false,
+        }
+    }
 }
 
 struct Session {
@@ -304,7 +335,8 @@ impl Bucket {
 async fn handle_ws(sock: WebSocket, s: Arc<Shared>) {
     let id = s.next_conn.fetch_add(1, Ordering::Relaxed);
     let (mut sink, mut stream) = sock.split();
-    let (tx, mut rx) = mpsc::channel::<ServerMsg>(WS_QUEUE);
+    let (queue, mut rx) = mpsc::channel::<ServerMsg>(WS_QUEUE);
+    let tx = Tx { queue, kick: Arc::new(Notify::new()) };
     let writer = tokio::spawn(async move {
         // Pings let both ends notice dead connections (and free their channels).
         let mut ping = tokio::time::interval(Duration::from_secs(30));
@@ -326,9 +358,13 @@ async fn handle_ws(sock: WebSocket, s: Arc<Shared>) {
     let mut my_channels: Vec<String> = vec![];
     let mut my_sessions: Vec<[u8; 16]> = vec![];
     let mut bucket = Bucket { tokens: Bucket::BURST, at: Instant::now() };
-    let err = |code: &str| push(&tx, ServerMsg::Error { code: code.into(), channel: None });
+    let err = |code: &str| tx.notify(ServerMsg::Error { code: code.into(), channel: None });
     loop {
-        let msg = match tokio::time::timeout(s.cfg.ws_idle, stream.next()).await {
+        let next = tokio::select! {
+            r = tokio::time::timeout(s.cfg.ws_idle, stream.next()) => r,
+            _ = tx.kick.notified() => break, // not keeping up with its queue
+        };
+        let msg = match next {
             Ok(Some(Ok(msg))) => msg,
             _ => break, // closed, failed, or silent for too long
         };
@@ -349,7 +385,7 @@ async fn handle_ws(sock: WebSocket, s: Arc<Shared>) {
                 match l.get(&channel) {
                     Some((owner, _)) if *owner != id => {
                         drop(l);
-                        push(&tx, ServerMsg::Error { code: "channel_busy".into(), channel: Some(channel) });
+                        tx.notify(ServerMsg::Error { code: "channel_busy".into(), channel: Some(channel) });
                         continue;
                     }
                     Some(_) => {}
@@ -422,16 +458,26 @@ async fn handle_ws(sock: WebSocket, s: Arc<Shared>) {
                 my_sessions.retain(|sid| s.sessions.lock().contains_key(sid));
                 my_sessions.push(sid);
                 let hex_id = hex::encode(sid);
-                push(&ltx, ServerMsg::Paired { session: hex_id.clone(), side: 0, udp_port: s.udp_port, bind_key: hex::encode(keys[0]) });
-                push(&tx, ServerMsg::Paired { session: hex_id, side: 1, udp_port: s.udp_port, bind_key: hex::encode(keys[1]) });
+                let to_listener = ServerMsg::Paired { session: hex_id.clone(), side: 0, udp_port: s.udp_port, bind_key: hex::encode(keys[0]) };
+                if !ltx.deliver(to_listener) {
+                    s.sessions.lock().remove(&sid);
+                    err("listener_unavailable");
+                    continue;
+                }
+                tx.deliver(ServerMsg::Paired { session: hex_id, side: 1, udp_port: s.udp_port, bind_key: hex::encode(keys[1]) });
             }
             ClientMsg::Signal { session, data } => {
                 let Some(sid) = hex::decode(&session).ok().and_then(|v| <[u8; 16]>::try_from(v).ok()) else { continue };
                 let sessions = s.sessions.lock();
                 let Some(sess) = sessions.get(&sid) else { continue };
                 let Some(side) = sess.ws.iter().position(|w| matches!(w, Some((cid, _)) if *cid == id)) else { continue };
-                if let Some((_, other)) = &sess.ws[1 - side] {
-                    push(other, ServerMsg::Signal { session, data });
+                let delivered = match &sess.ws[1 - side] {
+                    Some((_, other)) => other.deliver(ServerMsg::Signal { session, data }),
+                    None => false,
+                };
+                drop(sessions);
+                if !delivered {
+                    err("peer_unavailable");
                 }
             }
         }
@@ -523,10 +569,9 @@ async fn udp_loop(sock: Arc<tokio::net::UdpSocket>, s: Arc<Shared>) {
                     let Some(sess) = sessions.get_mut(&sid) else { continue };
                     let known = match sess.relay[side] {
                         Some(a) => a == from,
-                        // Clients without bind keys (v1.0.0) bind with their
-                        // first packet; nothing can move an address after that
-                        // except an authenticated BIND.
-                        None if !sess.authed[side] => {
+                        // Opt-in for v1.0.0 clients (no bind key): their first
+                        // packet binds; only an authenticated BIND can move it.
+                        None if s.cfg.legacy_bind && !sess.authed[side] => {
                             sess.relay[side] = Some(from);
                             true
                         }
@@ -566,5 +611,25 @@ async fn udp_loop(sock: Arc<tokio::net::UdpSocket>, s: Arc<Shared>) {
             }
             _ => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn a_full_queue_disconnects_instead_of_dropping_silently() {
+        let (queue, mut rx) = mpsc::channel(1);
+        let tx = Tx { queue, kick: Arc::new(Notify::new()) };
+        let msg = || ServerMsg::Error { code: "x".into(), channel: None };
+        assert!(tx.deliver(msg()));
+        tx.notify(msg()); // informational: dropped, no kick
+        assert!(tokio::time::timeout(Duration::from_millis(50), tx.kick.notified()).await.is_err());
+        assert!(!tx.deliver(msg()), "essential message reports failure");
+        tokio::time::timeout(Duration::from_millis(50), tx.kick.notified()).await.expect("client is kicked");
+        assert!(rx.recv().await.is_some());
+        drop(rx);
+        assert!(!tx.deliver(msg()), "closed queue");
     }
 }
