@@ -41,7 +41,7 @@ Latest release: **[Releases → latest](../../releases/latest)**
 
 | Platform | File | Notes |
 |---|---|---|
-| macOS 14+ (Apple silicon & Intel) | `WarpDrop-<version>-macOS.dmg` | Window + menu-bar droplet (drag files onto the icon). Unsigned builds: right-click → Open the first time. |
+| macOS 14+ (Apple silicon & Intel) | `WarpDrop-<version>-macOS.dmg` | Window + menu-bar droplet (drag files onto the icon). Signed with Developer ID and notarized by Apple. |
 | Windows 10/11 (x64) | `WarpDrop_<version>_x64-setup.exe` or `WarpDrop_<version>_x64_en-US.msi` / `_it-IT.msi` | Installs WebView2 if needed. |
 | Linux (x86_64) | `WarpDrop_<version>_amd64.deb` or `WarpDrop_<version>_amd64.AppImage` | `chmod +x` the AppImage. |
 | Android 11+ | `WarpDrop-<version>-android*.apk` | Allow installs from your browser/files app. |
@@ -124,13 +124,15 @@ Pushing a tag `vX.Y.Z` runs [`.github/workflows/release.yml`](.github/workflows/
 2. Windows, Linux, macOS, Android and server builds in parallel;
 3. a draft GitHub Release with checksums.
 
-Signing is optional and enabled through repository secrets: `MACOS_*`/`APPLE_*` (Developer ID + notarization), `WINDOWS_CERTIFICATE*`, `ANDROID_KEYSTORE*`. See the comments at the top of the workflow.
+Signing is optional and enabled through repository secrets: `MACOS_*`/`APPLE_*` (Developer ID + notarization), `WINDOWS_CERTIFICATE*`, `ANDROID_KEYSTORE*`. See the comments at the top of the workflow. The Android secrets are set, so CI publishes a release-signed APK.
+
+The signed, notarized macOS build is made on a Mac with the Apple ID signed into Xcode: `./scripts/release-macos.sh 1.2.0 --upload v1.2.0` builds it and replaces the CI's unsigned `.dmg` in that release.
 
 ## Known limitations
 
 - iOS is not distributed as a binary (needs an Apple Developer account).
 - Without signing secrets, macOS/Windows show a first-launch warning and Android ships a debug-signed APK.
-- iCloud auto-linking and the shared Keychain need a signed Apple build.
+- iCloud auto-linking and the shared Keychain need a signed Apple build (the published macOS release is signed; local unsigned builds skip them).
 - Removing a device from *My Devices* is local to that device.
 
 ## License

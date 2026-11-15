@@ -41,7 +41,7 @@ Ultima versione: **[Release → latest](../../releases/latest)**
 
 | Piattaforma | File | Note |
 |---|---|---|
-| macOS 14+ (Apple silicon e Intel) | `WarpDrop-<versione>-macOS.dmg` | Finestra + goccia nella barra dei menu (trascina i file sull'icona). Build non firmate: al primo avvio clic destro → Apri. |
+| macOS 14+ (Apple silicon e Intel) | `WarpDrop-<versione>-macOS.dmg` | Finestra + goccia nella barra dei menu (trascina i file sull'icona). Firmato con Developer ID e notarizzato da Apple. |
 | Windows 10/11 (x64) | `WarpDrop_<versione>_x64-setup.exe` oppure `WarpDrop_<versione>_x64_it-IT.msi` / `_en-US.msi` | Installa WebView2 se necessario. |
 | Linux (x86_64) | `WarpDrop_<versione>_amd64.deb` oppure `WarpDrop_<versione>_amd64.AppImage` | Rendi eseguibile l'AppImage con `chmod +x`. |
 | Android 11+ | `WarpDrop-<versione>-android*.apk` | Consenti l'installazione dal browser o dall'app File. |
@@ -124,13 +124,15 @@ Un tag `vX.Y.Z` avvia [`.github/workflows/release.yml`](.github/workflows/releas
 2. build in parallelo di Windows, Linux, macOS, Android e del server;
 3. release GitHub in bozza, con i checksum.
 
-La firma è facoltativa e si attiva con i secret del repository: `MACOS_*`/`APPLE_*` (Developer ID + notarizzazione), `WINDOWS_CERTIFICATE*`, `ANDROID_KEYSTORE*`. I dettagli sono nei commenti in cima al workflow.
+La firma è facoltativa e si attiva con i secret del repository: `MACOS_*`/`APPLE_*` (Developer ID + notarizzazione), `WINDOWS_CERTIFICATE*`, `ANDROID_KEYSTORE*`. I dettagli sono nei commenti in cima al workflow. I secret Android sono impostati, quindi la CI pubblica un APK firmato per il rilascio.
+
+La build macOS firmata e notarizzata si crea su un Mac con l'Apple ID collegato a Xcode: `./scripts/release-macos.sh 1.2.0 --upload v1.2.0` la compila e sostituisce nella release il `.dmg` non firmato della CI.
 
 ## Limitazioni note
 
 - iOS non è distribuito come binario: serve un account Apple Developer.
 - Senza i secret di firma, macOS e Windows mostrano un avviso al primo avvio, e per Android viene pubblicato un APK firmato in debug.
-- Il collegamento automatico via iCloud e il portachiavi condiviso richiedono una build Apple firmata.
+- Il collegamento automatico via iCloud e il portachiavi condiviso richiedono una build Apple firmata (la release macOS pubblicata lo è; le build locali non firmate ne fanno a meno).
 - Rimuovere un dispositivo da *I miei dispositivi* ha effetto solo su quel dispositivo.
 
 ## Licenza

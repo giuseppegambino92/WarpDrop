@@ -68,6 +68,8 @@ jobs:
             os: ubuntu-22.04 # oldest supported glibc for the .deb/.AppImage
             bundles: deb,appimage
     runs-on: ${{ matrix.os }}
+    env:
+      HAS_WINDOWS_CERT: ${{ secrets.WINDOWS_CERTIFICATE != '' }}
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
@@ -93,7 +95,7 @@ jobs:
             node -e "const f='desktop/src-tauri/tauri.conf.json',c=require('./'+f);c.version='$V';require('fs').writeFileSync(f,JSON.stringify(c,null,2)+'\n')"
           fi
       - name: Windows code-signing certificate
-        if: runner.os == 'Windows' && env.WINDOWS_CERTIFICATE != ''
+        if: runner.os == 'Windows' && env.HAS_WINDOWS_CERT == 'true'
         shell: pwsh
         env:
           WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
@@ -137,6 +139,9 @@ jobs:
     needs: core-tests
     if: github.event_name != 'workflow_dispatch' || inputs.only == 'all' || inputs.only == 'macos'
     runs-on: macos-15
+    env:
+      HAS_MACOS_CERT: ${{ secrets.MACOS_CERTIFICATE_P12 != '' }}
+      HAS_NOTARY: ${{ secrets.APPLE_ID != '' }}
     steps:
       - uses: actions/checkout@v5
       - uses: maxim-lobanov/setup-xcode@v1
@@ -168,7 +173,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO build
           cp -R build/dd/Build/Products/Release/WarpDrop.app "$RUNNER_TEMP/WarpDrop.app"
       - name: Import Developer ID certificate
-        if: env.MACOS_CERTIFICATE_P12 != ''
+        if: env.HAS_MACOS_CERT == 'true'
         env:
           MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
           MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
@@ -216,7 +221,7 @@ jobs:
           ln -s /Applications dmgroot/Applications
           hdiutil create -volname WarpDrop -srcfolder dmgroot -ov -format UDZO "dist/WarpDrop-$VERSION-macOS.dmg"
       - name: Notarize
-        if: env.SIGN == '1' && env.APPLE_ID != ''
+        if: env.SIGN == '1' && env.HAS_NOTARY == 'true'
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
