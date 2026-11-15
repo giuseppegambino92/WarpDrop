@@ -1,4 +1,5 @@
 import groovy.json.JsonSlurper
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
@@ -19,16 +20,23 @@ android {
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
     }
 
-    // Release signing from the environment (CI secrets). Without it, release
+    // Release signing. CI: WARPDROP_KEYSTORE_* environment (repository secrets).
+    // Local: ~/.warpdrop-keys/keystore.properties, restored from the keys vault
+    // (`./vault get warpdrop/keystore.properties …`). Without either, release
     // builds are unsigned and CI publishes the debug APK instead.
-    val keystore = System.getenv("WARPDROP_KEYSTORE_FILE")?.let { file(it) }?.takeIf { it.exists() }
+    val localProps = Properties().apply {
+        val f = File(System.getProperty("user.home"), ".warpdrop-keys/keystore.properties")
+        if (f.isFile) f.inputStream().use { load(it) }
+    }
+    fun signing(env: String, prop: String): String? = System.getenv(env) ?: localProps.getProperty(prop)
+    val keystore = signing("WARPDROP_KEYSTORE_FILE", "storeFile")?.let { file(it) }?.takeIf { it.exists() }
     signingConfigs {
         if (keystore != null) {
             create("release") {
                 storeFile = keystore
-                storePassword = System.getenv("WARPDROP_KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("WARPDROP_KEY_ALIAS")
-                keyPassword = System.getenv("WARPDROP_KEY_PASSWORD")
+                storePassword = signing("WARPDROP_KEYSTORE_PASSWORD", "storePassword")
+                keyAlias = signing("WARPDROP_KEY_ALIAS", "keyAlias")
+                keyPassword = signing("WARPDROP_KEY_PASSWORD", "keyPassword")
             }
         }
     }
