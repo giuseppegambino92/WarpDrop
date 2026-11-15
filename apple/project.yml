@@ -1,0 +1,183 @@
+# XcodeGen spec for the WarpDrop Apple apps.
+#   cd apple && xcodegen generate
+# The generated WarpDrop.xcodeproj is committed; regenerate after editing this file.
+name: WarpDrop
+options:
+  bundleIdPrefix: com.warpdrop
+  developmentLanguage: en
+  createIntermediateGroups: true
+  groupSortPosition: top
+  deploymentTarget:
+    macOS: "14.0"
+    iOS: "17.0"
+  xcodeVersion: "16.0"
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    SWIFT_EMIT_LOC_STRINGS: NO
+    LOCALIZATION_PREFERS_STRING_CATALOGS: YES
+    STRING_CATALOG_GENERATE_SYMBOLS: NO
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: ""
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    DEAD_CODE_STRIPPING: YES
+    ENABLE_PREVIEWS: NO
+    # The Rust XCFramework ships arm64 simulator slices only.
+    "EXCLUDED_ARCHS[sdk=iphonesimulator*]": x86_64
+    # Expanded into Info.plist / entitlements of every target.
+    WARP_KEYCHAIN_GROUP: "$(AppIdentifierPrefix)com.warpdrop.shared"
+    "WARP_APP_GROUP[sdk=macosx*]": "$(TeamIdentifierPrefix)com.warpdrop.shared"
+    "WARP_APP_GROUP[sdk=iphoneos*]": "group.com.warpdrop.shared"
+    "WARP_APP_GROUP[sdk=iphonesimulator*]": "group.com.warpdrop.shared"
+
+packages:
+  WarpCore:
+    path: WarpCore
+
+targets:
+  # ------------------------------------------------------------------ macOS
+  WarpDrop-macOS:
+    type: application
+    platform: macOS
+    sources:
+      - path: Shared
+      - path: App
+      - path: macOS
+        excludes: ["Info.plist", "*.entitlements"]
+      - path: Localization
+        excludes: ["*.json"]
+    dependencies:
+      - package: WarpCore
+        product: WarpCore
+      - target: WarpDropShare-macOS
+    settings:
+      base:
+        PRODUCT_NAME: WarpDrop
+        PRODUCT_BUNDLE_IDENTIFIER: com.warpdrop.WarpDrop
+        INFOPLIST_FILE: macOS/Info.plist
+        CODE_SIGN_ENTITLEMENTS: macOS/WarpDrop.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
+        COMBINE_HIDPI_IMAGES: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
+
+  WarpDropShare-macOS:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: Shared
+      - path: ShareExtension/Common
+      - path: ShareExtension/macOS
+        excludes: ["Info.plist", "*.entitlements"]
+      - path: Localization
+        excludes: ["*.json"]
+    dependencies:
+      - package: WarpCore
+        product: WarpCore
+    settings:
+      base:
+        PRODUCT_NAME: WarpDropShare
+        PRODUCT_BUNDLE_IDENTIFIER: com.warpdrop.WarpDrop.Share
+        INFOPLIST_FILE: ShareExtension/macOS/Info.plist
+        CODE_SIGN_ENTITLEMENTS: ShareExtension/macOS/WarpDropShare.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
+        APPLICATION_EXTENSION_API_ONLY: YES
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks @executable_path/../../../../Frameworks"
+
+  # -------------------------------------------------------------------- iOS
+  WarpDrop-iOS:
+    type: application
+    platform: iOS
+    sources:
+      - path: Shared
+      - path: App
+      - path: iOS
+        excludes: ["Info.plist", "*.entitlements"]
+      - path: Localization
+        excludes: ["*.json"]
+    dependencies:
+      - package: WarpCore
+        product: WarpCore
+      - target: WarpDropShare-iOS
+      - target: WarpDropLiveActivity
+    settings:
+      base:
+        PRODUCT_NAME: WarpDrop
+        PRODUCT_BUNDLE_IDENTIFIER: com.warpdrop.WarpDrop
+        INFOPLIST_FILE: iOS/Info.plist
+        CODE_SIGN_ENTITLEMENTS: iOS/WarpDrop.entitlements
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks"
+
+  WarpDropShare-iOS:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Shared
+      - path: ShareExtension/Common
+      - path: ShareExtension/iOS
+        excludes: ["Info.plist", "*.entitlements"]
+      - path: Localization
+        excludes: ["*.json"]
+    dependencies:
+      - package: WarpCore
+        product: WarpCore
+    settings:
+      base:
+        PRODUCT_NAME: WarpDropShare
+        PRODUCT_BUNDLE_IDENTIFIER: com.warpdrop.WarpDrop.Share
+        INFOPLIST_FILE: ShareExtension/iOS/Info.plist
+        CODE_SIGN_ENTITLEMENTS: ShareExtension/iOS/WarpDropShare.entitlements
+        TARGETED_DEVICE_FAMILY: "1,2"
+        APPLICATION_EXTENSION_API_ONLY: YES
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"
+
+  WarpDropLiveActivity:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: LiveActivity
+        excludes: ["Info.plist"]
+      - path: Shared/UI/Theme.swift
+      - path: Shared/Core/TransferActivityAttributes.swift
+      - path: Localization
+        excludes: ["*.json"]
+    dependencies:
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+    settings:
+      base:
+        PRODUCT_NAME: WarpDropLiveActivity
+        PRODUCT_BUNDLE_IDENTIFIER: com.warpdrop.WarpDrop.LiveActivity
+        INFOPLIST_FILE: LiveActivity/Info.plist
+        TARGETED_DEVICE_FAMILY: "1,2"
+        APPLICATION_EXTENSION_API_ONLY: YES
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"
+
+schemes:
+  WarpDrop-macOS:
+    build:
+      targets:
+        WarpDrop-macOS: all
+        WarpDropShare-macOS: all
+    run:
+      config: Debug
+      commandLineArguments:
+        "-WarpDebugPrintCode YES": false
+    archive:
+      config: Release
+  WarpDrop-iOS:
+    build:
+      targets:
+        WarpDrop-iOS: all
+        WarpDropShare-iOS: all
+        WarpDropLiveActivity: all
+    run:
+      config: Debug
+    archive:
+      config: Release

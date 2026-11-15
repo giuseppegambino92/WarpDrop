@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Public Download/WarpDrop (default download folder). -->
+    <external-path name="downloads" path="Download/WarpDrop/" />
+    <!-- Fallback download folder when Download/ is not writable. -->
+    <external-files-path name="received" path="WarpDrop/" />
+    <!-- Images received through clipboard sync. -->
+    <cache-path name="clipboard" path="clipboard/" />
+</paths>

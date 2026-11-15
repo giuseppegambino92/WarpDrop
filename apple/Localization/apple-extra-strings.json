@@ -1,0 +1,13 @@
+{
+  "_comment": "Apple-only UI strings not (yet) present in i18n/strings.json. Merged into Localizable.xcstrings by scripts/generate-strings.py. Candidates for upstreaming into the canonical file.",
+  "done": { "en": "Done", "it": "Fine" },
+  "link_action": { "en": "Link", "it": "Collega" },
+  "camera_denied": { "en": "Camera access is off. Turn it on in Settings to scan codes.", "it": "L'accesso alla fotocamera è disattivato. Attivalo in Impostazioni per scansionare i codici." },
+  "paste": { "en": "Paste", "it": "Incolla" },
+  "open_in_files": { "en": "Open in Files", "it": "Apri in File" },
+  "settings_language_english": { "en": "English", "it": "English" },
+  "settings_language_italian": { "en": "Italiano", "it": "Italiano" },
+  "share_sending_to": { "en": "Sending to {0}", "it": "Invio a {0}" },
+  "share_no_devices": { "en": "Open WarpDrop once so your devices show up here, or use a code.", "it": "Apri WarpDrop una volta perché i tuoi dispositivi compaiano qui, oppure usa un codice." },
+  "share_nothing": { "en": "Nothing to send", "it": "Niente da inviare" }
+}

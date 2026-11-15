@@ -1,0 +1,14 @@
+[package]
+name = "warp-cli"
+description = "Headless WarpDrop node for scripting and diagnostics"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "warp"
+path = "src/main.rs"
+
+[dependencies]
+libwarp = { path = "../libwarp" }
+anyhow.workspace = true

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Not sandboxed: shipped with Developer ID + hardened runtime (adb USB probing, arbitrary download folder). -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>$(WARP_APP_GROUP)</string>
+	</array>
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(WARP_KEYCHAIN_GROUP)</string>
+	</array>
+	<key>com.apple.developer.ubiquity-kvstore-identifier</key>
+	<string>$(TeamIdentifierPrefix)com.warpdrop.WarpDrop</string>
+</dict>
+</plist>

@@ -1,0 +1,1228 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		01ED106F007ECE9D2139A0CF /* IdentityStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB0B8E82290D8146B42E4BA4 /* IdentityStore.swift */; };
+		0376562616C43F14EA6EBC88 /* ShareModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20D5CD79B85FDE07F45F2C1F /* ShareModel.swift */; };
+		0455B936463F7F4601117D15 /* WarpDropShare-iOS.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 93D9DB36945D7816926261D2 /* WarpDropShare-iOS.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		062B1795FD818E645EC1E730 /* BonjourAdvertiser.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF258A9923AE1EE11AB69D40 /* BonjourAdvertiser.swift */; };
+		071D6572EC331B8FB80D9F5F /* CodeBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8EA6FCA6759629AF3A375E2 /* CodeBarView.swift */; };
+		10290FFD71E42BB0C2DBC855 /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 5B36A3F0883901DB50DFE2AA /* InfoPlist.xcstrings */; };
+		131ED402BC94F513B888C623 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 3562A3B94609FAC8169C5BD0 /* Localizable.xcstrings */; };
+		1479EEE9CC48D7E6574448B6 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9D83DA5F80F6A39212AEB73 /* Theme.swift */; };
+		16A39937A020F148712DF628 /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 5B36A3F0883901DB50DFE2AA /* InfoPlist.xcstrings */; };
+		16F8EC394DF5E8BD81CD0C5D /* BonjourBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEA6BD40EE86FF1C1CC1306E /* BonjourBrowser.swift */; };
+		174D724ADBBAEC91DDC56E91 /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 5B36A3F0883901DB50DFE2AA /* InfoPlist.xcstrings */; };
+		1D413BDE429F9203CCEDE93C /* PeerCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 258D45643E384D0EDEA67500 /* PeerCache.swift */; };
+		1FF3530257B2CF4EFA408D5E /* WarpFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32E07C895C3647E25362E772 /* WarpFormatting.swift */; };
+		206EA2186000580BC28E7F9E /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 904C14BA172FCEE299AF5904 /* MainView.swift */; };
+		20E291F4684DA9D6E4BA0254 /* EventBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2390AEA52F99EA06F30DB8CC /* EventBridge.swift */; };
+		26EC27DF357DFDF3B24DFC45 /* TransferActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6163EB4345E7086A2A959132 /* TransferActivityAttributes.swift */; };
+		27542E2623F44D10A64512BB /* LinkDeviceSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF06C4C2414CB3D60D8355DE /* LinkDeviceSheet.swift */; };
+		290BCB20EE47B446A7104BFD /* ShareView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2554E6071D9672C886FCE3E3 /* ShareView.swift */; };
+		2B07B3098DE52C4F85FF8294 /* TransferActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6163EB4345E7086A2A959132 /* TransferActivityAttributes.swift */; };
+		2C1AC31F00F32CE59F395761 /* CodeEntryField.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED96F9D3526BE4DB30182F7F /* CodeEntryField.swift */; };
+		2D1A6A94AAB6E963338594D2 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 030978BF3FC668FAF905821F /* SettingsView.swift */; };
+		305CC5888C9150B24C2760EB /* TransferLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FAE67C6AFA2F8051F4CCEBB /* TransferLiveActivity.swift */; };
+		338106A84F8EE83329C0D90E /* WarpFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32E07C895C3647E25362E772 /* WarpFormatting.swift */; };
+		3985F0C417DB02A7C1D3678F /* Notifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5EA1CB53065808CC4F7A64 /* Notifier.swift */; };
+		3AF28F2CA6BF8EC141E7E5A2 /* TransferHUD.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BDD5576127E2AAE71E71FF2 /* TransferHUD.swift */; };
+		3C60E0D78DEC91BED70B541A /* Localizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38C679AFF0EDCA9574EBBA1D /* Localizer.swift */; };
+		3C6A9E5E4CC37CFFA0B96A35 /* PeerCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 258D45643E384D0EDEA67500 /* PeerCache.swift */; };
+		3F77608F2C6C66F44D438D04 /* EventBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2390AEA52F99EA06F30DB8CC /* EventBridge.swift */; };
+		40B6FFCA591EEDEEB3F9597A /* WarpDropMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5750C76C32C5E2EA9372918B /* WarpDropMacApp.swift */; };
+		4B986443F82B61A91B7AEC13 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 030978BF3FC668FAF905821F /* SettingsView.swift */; };
+		4D2342DAE848BC954A13C97B /* OfferSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA259D599F0720D7106F64C7 /* OfferSheet.swift */; };
+		4EA03B8F0D5FB85F461D5B40 /* TransferActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6163EB4345E7086A2A959132 /* TransferActivityAttributes.swift */; };
+		5167D628E4DBF2193B12640D /* WarpDropLiveActivity.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 6E6385A96DBD058D51BE7E27 /* WarpDropLiveActivity.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		56C913037BE5727948961823 /* QuickCodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADED804B585D26DF4F52D01A /* QuickCodeView.swift */; };
+		58257CE557713F5DE2507446 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7A15F9E9A9CE3DB752358804 /* WidgetKit.framework */; };
+		5846B4D5EE2C0F5B128E0A06 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 366BC61C091B7FB88C29BBB8 /* AppDelegate.swift */; };
+		5CE70BADA17E082DE86D8CA0 /* IdentityStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB0B8E82290D8146B42E4BA4 /* IdentityStore.swift */; };
+		60537C18F89068F9CF6B0593 /* PeerCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 258D45643E384D0EDEA67500 /* PeerCache.swift */; };
+		6388927CE5D6F8E2BB0BDC20 /* BonjourBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEA6BD40EE86FF1C1CC1306E /* BonjourBrowser.swift */; };
+		645C1E8B1C4B8D7C4E38735B /* IdentityStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB0B8E82290D8146B42E4BA4 /* IdentityStore.swift */; };
+		64F7F94F3E40C00C26BC2212 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 3562A3B94609FAC8169C5BD0 /* Localizable.xcstrings */; };
+		65D6BA9EC0173C8082321F6B /* StatusItemController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04604EC0ECF5214B1B87E223 /* StatusItemController.swift */; };
+		662706CBDFBF35D8B06A4B9F /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 3562A3B94609FAC8169C5BD0 /* Localizable.xcstrings */; };
+		66ECED98DCC203DD4E87D98D /* DeviceViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9044C07FE21CFDECF07824A9 /* DeviceViews.swift */; };
+		6F94615157FDBC67C03BAA83 /* LinkDeviceSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF06C4C2414CB3D60D8355DE /* LinkDeviceSheet.swift */; };
+		73D85BB7A917D149D09A24D7 /* BonjourBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEA6BD40EE86FF1C1CC1306E /* BonjourBrowser.swift */; };
+		7418B09405CBC2592FC66838 /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 904C14BA172FCEE299AF5904 /* MainView.swift */; };
+		7565168CB8F7DC50F950DB49 /* CodeBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8EA6FCA6759629AF3A375E2 /* CodeBarView.swift */; };
+		76E01FFE36DA2294BABB1D12 /* BonjourAdvertiser.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF258A9923AE1EE11AB69D40 /* BonjourAdvertiser.swift */; };
+		7AFEA1BF50123BD215105A72 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 3562A3B94609FAC8169C5BD0 /* Localizable.xcstrings */; };
+		81843D62B8F5868C2410D01E /* AppGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 476EE296CEF499F7F38AD553 /* AppGroup.swift */; };
+		827C20C40ED6FE3AFD2188E1 /* TransferActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6163EB4345E7086A2A959132 /* TransferActivityAttributes.swift */; };
+		8BE11D63F817F9031961747D /* ShareView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2554E6071D9672C886FCE3E3 /* ShareView.swift */; };
+		8CCE44DF2C934D88D3C1FD57 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E66D99B160DDF2824FBCF13 /* Components.swift */; };
+		8DF0B000A8D23ABB929AA188 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E66D99B160DDF2824FBCF13 /* Components.swift */; };
+		8FFE0DB48CB1D8A4E895B788 /* Notifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5EA1CB53065808CC4F7A64 /* Notifier.swift */; };
+		9007D7D63585C7AF6278C0C6 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9D83DA5F80F6A39212AEB73 /* Theme.swift */; };
+		9222993D81B4295009097382 /* TransferStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62CD34EAA7A5AEE974878E07 /* TransferStatus.swift */; };
+		923923160DAABC6DF70AC4B4 /* BonjourAdvertiser.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF258A9923AE1EE11AB69D40 /* BonjourAdvertiser.swift */; };
+		95CEC8C7377ED8D2928FF82F /* WarpFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32E07C895C3647E25362E772 /* WarpFormatting.swift */; };
+		9908E1D452D0C449A4C4CC83 /* QRScannerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1347FA2C849C18F6AF62A61 /* QRScannerSheet.swift */; };
+		994999A480D2FF74FB4B4D2D /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA11B52E75E0CB68897056FD /* ShareViewController.swift */; };
+		9BEC6EC5535CB89F35C2876D /* AppGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 476EE296CEF499F7F38AD553 /* AppGroup.swift */; };
+		9CA8A2EBD23585120DBCDD43 /* Localizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38C679AFF0EDCA9574EBBA1D /* Localizer.swift */; };
+		9DC3B8D35D1CA119EBBC42B5 /* WarpDropIOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04D8F52CE3D48CAB07F289BA /* WarpDropIOSApp.swift */; };
+		9E5141C609A7A0E0CED08755 /* RadarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5C7ACED0C7179CCC8622704 /* RadarView.swift */; };
+		A0DD937C413D570D697BA0B4 /* CodeEntryField.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED96F9D3526BE4DB30182F7F /* CodeEntryField.swift */; };
+		A1664532EC89365DDD9E9C85 /* SendPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0E14440F9FD92A63D59478E /* SendPayload.swift */; };
+		A1F2345CD68C8FD77CE40412 /* EventBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2390AEA52F99EA06F30DB8CC /* EventBridge.swift */; };
+		A3E1972E9D12E343BFD961A1 /* ICloudTrustSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6466EDE9F9A6346F993844D5 /* ICloudTrustSync.swift */; };
+		A52CE169F461A66C6C5050A4 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E66D99B160DDF2824FBCF13 /* Components.swift */; };
+		A5F85583B5A5B84DB03AE764 /* WarpCore in Frameworks */ = {isa = PBXBuildFile; productRef = 4A7348DB03E8A858928B06CA /* WarpCore */; };
+		A6CA946D358D68B3182D7B1E /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 3562A3B94609FAC8169C5BD0 /* Localizable.xcstrings */; };
+		AA2381C4CAB12869CFAC861F /* AppGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 476EE296CEF499F7F38AD553 /* AppGroup.swift */; };
+		ADA61CF00D77D449C5C256A2 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 31EC49B088031C33FE8C95B5 /* SwiftUI.framework */; };
+		AF17C5AAB69C7A38B4C493D0 /* SettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 070CB966824EAA40E3F54B7F /* SettingsStore.swift */; };
+		B030B8613AC6165439526B00 /* SendPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0E14440F9FD92A63D59478E /* SendPayload.swift */; };
+		B33C73CC832528486B7C9D3C /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FBAED364DC160EB3B5EE4F2 /* ShareViewController.swift */; };
+		B988AA33C2B59F5CB9C5271E /* DeviceViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9044C07FE21CFDECF07824A9 /* DeviceViews.swift */; };
+		BA817D1463556378E44B3236 /* IdentityStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB0B8E82290D8146B42E4BA4 /* IdentityStore.swift */; };
+		BC0A4C84C2B99100D6BB4F89 /* BonjourBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEA6BD40EE86FF1C1CC1306E /* BonjourBrowser.swift */; };
+		BF4E96829AD8E2BD8315133C /* TransferActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6163EB4345E7086A2A959132 /* TransferActivityAttributes.swift */; };
+		BFE7053542D176311F952F70 /* TransferStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62CD34EAA7A5AEE974878E07 /* TransferStatus.swift */; };
+		C1264E09A86A86888B1C7DF3 /* Localizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38C679AFF0EDCA9574EBBA1D /* Localizer.swift */; };
+		C4E5C5930727AF13BA830418 /* PlatformServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 800275DC83A517137B2F980C /* PlatformServices.swift */; };
+		C85F6419E84A02B5A5BB36AB /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77080CF17D0A2470ED5CD043 /* AppModel.swift */; };
+		C9D52D24D65ACF02C53FE9C9 /* QuickCodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADED804B585D26DF4F52D01A /* QuickCodeView.swift */; };
+		CA346361AA6450D8852BFDE6 /* SendPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0E14440F9FD92A63D59478E /* SendPayload.swift */; };
+		CAEF3DB18CB42F2821484AA7 /* TransferHUD.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BDD5576127E2AAE71E71FF2 /* TransferHUD.swift */; };
+		CC2DE6C39B0559EA19BD330C /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E66D99B160DDF2824FBCF13 /* Components.swift */; };
+		CCF24004C203E45790F0C2AD /* ICloudTrustSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6466EDE9F9A6346F993844D5 /* ICloudTrustSync.swift */; };
+		CE02DF7D1B10642E8F50AF18 /* TransferStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62CD34EAA7A5AEE974878E07 /* TransferStatus.swift */; };
+		D33C6F6420A0F8F48F0CC18F /* MacMainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E50B1D85C3B379D4E7F42EEF /* MacMainView.swift */; };
+		D45DE459FF5CA5651F5BF7C7 /* OfferSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA259D599F0720D7106F64C7 /* OfferSheet.swift */; };
+		D4B2E75DB7964D33A503E659 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77080CF17D0A2470ED5CD043 /* AppModel.swift */; };
+		D5C1EABF6E08E1AFAD1CD54F /* WarpCore in Frameworks */ = {isa = PBXBuildFile; productRef = A8D74E6D6D1AB88AF06550D3 /* WarpCore */; };
+		D9DDD23E4712E0A3F58BCC59 /* PlatformServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 800275DC83A517137B2F980C /* PlatformServices.swift */; };
+		DA5540CE55F929A1B111ECCD /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9D83DA5F80F6A39212AEB73 /* Theme.swift */; };
+		DB6F9C6045C2EF8E737B1966 /* WarpCore in Frameworks */ = {isa = PBXBuildFile; productRef = B89562A5AC05A706CE8B0899 /* WarpCore */; };
+		E1DBDC5933C76FB59E794BB5 /* EventBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2390AEA52F99EA06F30DB8CC /* EventBridge.swift */; };
+		E3900040A1DE47306DB37283 /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 5B36A3F0883901DB50DFE2AA /* InfoPlist.xcstrings */; };
+		E484E43F32A3F1434AB68BC2 /* CodeEntryField.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED96F9D3526BE4DB30182F7F /* CodeEntryField.swift */; };
+		E57587F5EEB3C481B7EAAF4E /* AppGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 476EE296CEF499F7F38AD553 /* AppGroup.swift */; };
+		EAEABD2D8206634341121A40 /* ShareModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20D5CD79B85FDE07F45F2C1F /* ShareModel.swift */; };
+		ECFEDB563FD1032459E19BB8 /* PeerCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 258D45643E384D0EDEA67500 /* PeerCache.swift */; };
+		EDDA9E3FB199FD8F82EAFAD2 /* BonjourAdvertiser.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF258A9923AE1EE11AB69D40 /* BonjourAdvertiser.swift */; };
+		EE294DDDBFBA3D97CE17124B /* SendPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0E14440F9FD92A63D59478E /* SendPayload.swift */; };
+		EEC7773AD9C2B181C6E8AFB3 /* SettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 070CB966824EAA40E3F54B7F /* SettingsStore.swift */; };
+		EFBA5E1760B5859BBFDA92D8 /* WarpDropShare-macOS.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 9294CFA607A64766127B8C27 /* WarpDropShare-macOS.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		F06C4632B8335BDF212FF3DE /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 5B36A3F0883901DB50DFE2AA /* InfoPlist.xcstrings */; };
+		F22096DB3C8FFF05AB237B07 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9D83DA5F80F6A39212AEB73 /* Theme.swift */; };
+		F22D59D555D8DA056D691CFD /* CodeEntryField.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED96F9D3526BE4DB30182F7F /* CodeEntryField.swift */; };
+		F507DB57E279CB8988CFB8F7 /* LiveActivityController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 777FC3502BCD892D9073F47C /* LiveActivityController.swift */; };
+		F5F2E2AEBC4304A72BB4943D /* WarpCore in Frameworks */ = {isa = PBXBuildFile; productRef = 2BDD460307BF1A00467BFC7A /* WarpCore */; };
+		F6E4C67095DDAD3C1865B33B /* WarpFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32E07C895C3647E25362E772 /* WarpFormatting.swift */; };
+		F877F3D09F601D4FEC1E7ED2 /* TransferStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62CD34EAA7A5AEE974878E07 /* TransferStatus.swift */; };
+		FAC87C11CC006D8F7C7BA1D5 /* Localizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38C679AFF0EDCA9574EBBA1D /* Localizer.swift */; };
+		FF6DAABBBF6F4354448977D1 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9D83DA5F80F6A39212AEB73 /* Theme.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		772A1F0CA02E127BFEDB9DD1 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C7818309942C3BA1330AD6DF /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 7F67EF870894CC49D91903C3;
+			remoteInfo = "WarpDropShare-macOS";
+		};
+		912FB6AE1159F7269A5794FC /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C7818309942C3BA1330AD6DF /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 7B01B15D6CCF89BFFAFE957B;
+			remoteInfo = WarpDropLiveActivity;
+		};
+		F5604DA40736E0D287CD9229 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C7818309942C3BA1330AD6DF /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 31038AFF9B487788B82689D6;
+			remoteInfo = "WarpDropShare-iOS";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		4B1A8BA1D826991F23502DC9 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				EFBA5E1760B5859BBFDA92D8 /* WarpDropShare-macOS.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BF92731275FC3E7DD579AD1E /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				0455B936463F7F4601117D15 /* WarpDropShare-iOS.appex in Embed Foundation Extensions */,
+				5167D628E4DBF2193B12640D /* WarpDropLiveActivity.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		030978BF3FC668FAF905821F /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		04604EC0ECF5214B1B87E223 /* StatusItemController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusItemController.swift; sourceTree = "<group>"; };
+		04D8F52CE3D48CAB07F289BA /* WarpDropIOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WarpDropIOSApp.swift; sourceTree = "<group>"; };
+		070CB966824EAA40E3F54B7F /* SettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStore.swift; sourceTree = "<group>"; };
+		0F0988B3F467663E8940F1B3 /* WarpDrop-macOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "WarpDrop-macOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		20D5CD79B85FDE07F45F2C1F /* ShareModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareModel.swift; sourceTree = "<group>"; };
+		2390AEA52F99EA06F30DB8CC /* EventBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventBridge.swift; sourceTree = "<group>"; };
+		2554E6071D9672C886FCE3E3 /* ShareView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareView.swift; sourceTree = "<group>"; };
+		258D45643E384D0EDEA67500 /* PeerCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerCache.swift; sourceTree = "<group>"; };
+		31EC49B088031C33FE8C95B5 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		32E07C895C3647E25362E772 /* WarpFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WarpFormatting.swift; sourceTree = "<group>"; };
+		3562A3B94609FAC8169C5BD0 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		366BC61C091B7FB88C29BBB8 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		38C679AFF0EDCA9574EBBA1D /* Localizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Localizer.swift; sourceTree = "<group>"; };
+		476EE296CEF499F7F38AD553 /* AppGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppGroup.swift; sourceTree = "<group>"; };
+		4BDD5576127E2AAE71E71FF2 /* TransferHUD.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransferHUD.swift; sourceTree = "<group>"; };
+		5720CA5D3CB723A3966B65CF /* WarpCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = WarpCore; path = WarpCore; sourceTree = SOURCE_ROOT; };
+		5750C76C32C5E2EA9372918B /* WarpDropMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WarpDropMacApp.swift; sourceTree = "<group>"; };
+		5B36A3F0883901DB50DFE2AA /* InfoPlist.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = InfoPlist.xcstrings; sourceTree = "<group>"; };
+		6163EB4345E7086A2A959132 /* TransferActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransferActivityAttributes.swift; sourceTree = "<group>"; };
+		62CD34EAA7A5AEE974878E07 /* TransferStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransferStatus.swift; sourceTree = "<group>"; };
+		6466EDE9F9A6346F993844D5 /* ICloudTrustSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ICloudTrustSync.swift; sourceTree = "<group>"; };
+		6E6385A96DBD058D51BE7E27 /* WarpDropLiveActivity.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = WarpDropLiveActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		77080CF17D0A2470ED5CD043 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		777FC3502BCD892D9073F47C /* LiveActivityController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityController.swift; sourceTree = "<group>"; };
+		7A15F9E9A9CE3DB752358804 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		800275DC83A517137B2F980C /* PlatformServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformServices.swift; sourceTree = "<group>"; };
+		8E66D99B160DDF2824FBCF13 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
+		9044C07FE21CFDECF07824A9 /* DeviceViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceViews.swift; sourceTree = "<group>"; };
+		904C14BA172FCEE299AF5904 /* MainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
+		9294CFA607A64766127B8C27 /* WarpDropShare-macOS.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "WarpDropShare-macOS.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+		93D9DB36945D7816926261D2 /* WarpDropShare-iOS.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = "WarpDropShare-iOS.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+		9FAE67C6AFA2F8051F4CCEBB /* TransferLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransferLiveActivity.swift; sourceTree = "<group>"; };
+		9FBAED364DC160EB3B5EE4F2 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
+		A5C7ACED0C7179CCC8622704 /* RadarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarView.swift; sourceTree = "<group>"; };
+		A8EA6FCA6759629AF3A375E2 /* CodeBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeBarView.swift; sourceTree = "<group>"; };
+		AA259D599F0720D7106F64C7 /* OfferSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfferSheet.swift; sourceTree = "<group>"; };
+		AC6D776F45B17BE9E2C1A71A /* WarpDrop-iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "WarpDrop-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		ADED804B585D26DF4F52D01A /* QuickCodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickCodeView.swift; sourceTree = "<group>"; };
+		B9D83DA5F80F6A39212AEB73 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		DB0B8E82290D8146B42E4BA4 /* IdentityStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdentityStore.swift; sourceTree = "<group>"; };
+		DF258A9923AE1EE11AB69D40 /* BonjourAdvertiser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BonjourAdvertiser.swift; sourceTree = "<group>"; };
+		E0E14440F9FD92A63D59478E /* SendPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendPayload.swift; sourceTree = "<group>"; };
+		E50B1D85C3B379D4E7F42EEF /* MacMainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacMainView.swift; sourceTree = "<group>"; };
+		EA11B52E75E0CB68897056FD /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
+		ED96F9D3526BE4DB30182F7F /* CodeEntryField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeEntryField.swift; sourceTree = "<group>"; };
+		EF06C4C2414CB3D60D8355DE /* LinkDeviceSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkDeviceSheet.swift; sourceTree = "<group>"; };
+		F1347FA2C849C18F6AF62A61 /* QRScannerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRScannerSheet.swift; sourceTree = "<group>"; };
+		FB5EA1CB53065808CC4F7A64 /* Notifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notifier.swift; sourceTree = "<group>"; };
+		FEA6BD40EE86FF1C1CC1306E /* BonjourBrowser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BonjourBrowser.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		0A511C4A7DEEF83C6A515B8E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F5F2E2AEBC4304A72BB4943D /* WarpCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		19FA7A27D4A2906FBA9DE386 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				58257CE557713F5DE2507446 /* WidgetKit.framework in Frameworks */,
+				ADA61CF00D77D449C5C256A2 /* SwiftUI.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		51BC7F7AD317CF1688954F40 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D5C1EABF6E08E1AFAD1CD54F /* WarpCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		68C19C4589A54703D969FF5F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A5F85583B5A5B84DB03AE764 /* WarpCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C6DB39EA854C006A025BBF74 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DB6F9C6045C2EF8E737B1966 /* WarpCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		01E396472DA454FFCCEE2D48 = {
+			isa = PBXGroup;
+			children = (
+				0FC9255C0138CA1CBF8F1DC6 /* App */,
+				96068683DB23EE78B6B1579F /* iOS */,
+				F60DF9614F4FDCD2E0B03887 /* LiveActivity */,
+				D8A8DB4EA0373F2331869866 /* Localization */,
+				E670644FDA728A1BA8073D71 /* macOS */,
+				B39B06C81C8B7ADF972A5A12 /* Packages */,
+				13DB0B146B43A73FF46DA97D /* Shared */,
+				6CDC798FBE02A5F865930AEA /* ShareExtension */,
+				24C862E6AFAADA21665C54BC /* Frameworks */,
+				CDF774A398C3727B1A8B8D8F /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		0FC9255C0138CA1CBF8F1DC6 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				F9C7930646E56C3D98B6B75D /* Model */,
+				A0945FAFDDFC7A6D76F0A7F4 /* Platform */,
+				9CEC0CFE9EB01305F5AD2201 /* Views */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		13DB0B146B43A73FF46DA97D /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				2B66B31C36555D94D4F8501D /* Core */,
+				8308666F4221C5BF74583C86 /* UI */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		24C862E6AFAADA21665C54BC /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				31EC49B088031C33FE8C95B5 /* SwiftUI.framework */,
+				7A15F9E9A9CE3DB752358804 /* WidgetKit.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		2B66B31C36555D94D4F8501D /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				476EE296CEF499F7F38AD553 /* AppGroup.swift */,
+				DF258A9923AE1EE11AB69D40 /* BonjourAdvertiser.swift */,
+				FEA6BD40EE86FF1C1CC1306E /* BonjourBrowser.swift */,
+				2390AEA52F99EA06F30DB8CC /* EventBridge.swift */,
+				DB0B8E82290D8146B42E4BA4 /* IdentityStore.swift */,
+				38C679AFF0EDCA9574EBBA1D /* Localizer.swift */,
+				258D45643E384D0EDEA67500 /* PeerCache.swift */,
+				E0E14440F9FD92A63D59478E /* SendPayload.swift */,
+				6163EB4345E7086A2A959132 /* TransferActivityAttributes.swift */,
+				62CD34EAA7A5AEE974878E07 /* TransferStatus.swift */,
+				32E07C895C3647E25362E772 /* WarpFormatting.swift */,
+			);
+			path = Core;
+			sourceTree = "<group>";
+		};
+		6CDC798FBE02A5F865930AEA /* ShareExtension */ = {
+			isa = PBXGroup;
+			children = (
+				F3872F29F6F2DDAC961AE0D5 /* Common */,
+				96952DBB9069E71E8DFE0018 /* iOS */,
+				8DEEC870602092511390858E /* macOS */,
+			);
+			path = ShareExtension;
+			sourceTree = "<group>";
+		};
+		8308666F4221C5BF74583C86 /* UI */ = {
+			isa = PBXGroup;
+			children = (
+				ED96F9D3526BE4DB30182F7F /* CodeEntryField.swift */,
+				8E66D99B160DDF2824FBCF13 /* Components.swift */,
+				B9D83DA5F80F6A39212AEB73 /* Theme.swift */,
+			);
+			path = UI;
+			sourceTree = "<group>";
+		};
+		8DEEC870602092511390858E /* macOS */ = {
+			isa = PBXGroup;
+			children = (
+				EA11B52E75E0CB68897056FD /* ShareViewController.swift */,
+			);
+			path = macOS;
+			sourceTree = "<group>";
+		};
+		96068683DB23EE78B6B1579F /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				777FC3502BCD892D9073F47C /* LiveActivityController.swift */,
+				F1347FA2C849C18F6AF62A61 /* QRScannerSheet.swift */,
+				04D8F52CE3D48CAB07F289BA /* WarpDropIOSApp.swift */,
+			);
+			path = iOS;
+			sourceTree = "<group>";
+		};
+		96952DBB9069E71E8DFE0018 /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				9FBAED364DC160EB3B5EE4F2 /* ShareViewController.swift */,
+			);
+			path = iOS;
+			sourceTree = "<group>";
+		};
+		9CEC0CFE9EB01305F5AD2201 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				A8EA6FCA6759629AF3A375E2 /* CodeBarView.swift */,
+				9044C07FE21CFDECF07824A9 /* DeviceViews.swift */,
+				EF06C4C2414CB3D60D8355DE /* LinkDeviceSheet.swift */,
+				904C14BA172FCEE299AF5904 /* MainView.swift */,
+				AA259D599F0720D7106F64C7 /* OfferSheet.swift */,
+				ADED804B585D26DF4F52D01A /* QuickCodeView.swift */,
+				030978BF3FC668FAF905821F /* SettingsView.swift */,
+				4BDD5576127E2AAE71E71FF2 /* TransferHUD.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		A0945FAFDDFC7A6D76F0A7F4 /* Platform */ = {
+			isa = PBXGroup;
+			children = (
+				800275DC83A517137B2F980C /* PlatformServices.swift */,
+			);
+			path = Platform;
+			sourceTree = "<group>";
+		};
+		B39B06C81C8B7ADF972A5A12 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				5720CA5D3CB723A3966B65CF /* WarpCore */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+		CDF774A398C3727B1A8B8D8F /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				AC6D776F45B17BE9E2C1A71A /* WarpDrop-iOS.app */,
+				0F0988B3F467663E8940F1B3 /* WarpDrop-macOS.app */,
+				6E6385A96DBD058D51BE7E27 /* WarpDropLiveActivity.appex */,
+				93D9DB36945D7816926261D2 /* WarpDropShare-iOS.appex */,
+				9294CFA607A64766127B8C27 /* WarpDropShare-macOS.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		D8A8DB4EA0373F2331869866 /* Localization */ = {
+			isa = PBXGroup;
+			children = (
+				5B36A3F0883901DB50DFE2AA /* InfoPlist.xcstrings */,
+				3562A3B94609FAC8169C5BD0 /* Localizable.xcstrings */,
+			);
+			path = Localization;
+			sourceTree = "<group>";
+		};
+		E670644FDA728A1BA8073D71 /* macOS */ = {
+			isa = PBXGroup;
+			children = (
+				366BC61C091B7FB88C29BBB8 /* AppDelegate.swift */,
+				E50B1D85C3B379D4E7F42EEF /* MacMainView.swift */,
+				A5C7ACED0C7179CCC8622704 /* RadarView.swift */,
+				04604EC0ECF5214B1B87E223 /* StatusItemController.swift */,
+				5750C76C32C5E2EA9372918B /* WarpDropMacApp.swift */,
+			);
+			path = macOS;
+			sourceTree = "<group>";
+		};
+		F3872F29F6F2DDAC961AE0D5 /* Common */ = {
+			isa = PBXGroup;
+			children = (
+				20D5CD79B85FDE07F45F2C1F /* ShareModel.swift */,
+				2554E6071D9672C886FCE3E3 /* ShareView.swift */,
+			);
+			path = Common;
+			sourceTree = "<group>";
+		};
+		F60DF9614F4FDCD2E0B03887 /* LiveActivity */ = {
+			isa = PBXGroup;
+			children = (
+				9FAE67C6AFA2F8051F4CCEBB /* TransferLiveActivity.swift */,
+			);
+			path = LiveActivity;
+			sourceTree = "<group>";
+		};
+		F9C7930646E56C3D98B6B75D /* Model */ = {
+			isa = PBXGroup;
+			children = (
+				77080CF17D0A2470ED5CD043 /* AppModel.swift */,
+				6466EDE9F9A6346F993844D5 /* ICloudTrustSync.swift */,
+				FB5EA1CB53065808CC4F7A64 /* Notifier.swift */,
+				070CB966824EAA40E3F54B7F /* SettingsStore.swift */,
+			);
+			path = Model;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		31038AFF9B487788B82689D6 /* WarpDropShare-iOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D558654C24CCC5E773981382 /* Build configuration list for PBXNativeTarget "WarpDropShare-iOS" */;
+			buildPhases = (
+				F0D255C193A8BC9539131762 /* Sources */,
+				3ADA51DA9B9B480A552168E9 /* Resources */,
+				0A511C4A7DEEF83C6A515B8E /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "WarpDropShare-iOS";
+			packageProductDependencies = (
+				2BDD460307BF1A00467BFC7A /* WarpCore */,
+			);
+			productName = "WarpDropShare-iOS";
+			productReference = 93D9DB36945D7816926261D2 /* WarpDropShare-iOS.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		7B01B15D6CCF89BFFAFE957B /* WarpDropLiveActivity */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E58E83301D5D29A19E881ED9 /* Build configuration list for PBXNativeTarget "WarpDropLiveActivity" */;
+			buildPhases = (
+				20D27CDA41872F57E708E8C6 /* Sources */,
+				F204FBB2E4B592CB66641D44 /* Resources */,
+				19FA7A27D4A2906FBA9DE386 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = WarpDropLiveActivity;
+			packageProductDependencies = (
+			);
+			productName = WarpDropLiveActivity;
+			productReference = 6E6385A96DBD058D51BE7E27 /* WarpDropLiveActivity.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		7F67EF870894CC49D91903C3 /* WarpDropShare-macOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8E8F786F67639A0A09488588 /* Build configuration list for PBXNativeTarget "WarpDropShare-macOS" */;
+			buildPhases = (
+				8A4FFB5316F1F183B6161F63 /* Sources */,
+				F6879A1D5969029417B6AFAA /* Resources */,
+				68C19C4589A54703D969FF5F /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "WarpDropShare-macOS";
+			packageProductDependencies = (
+				4A7348DB03E8A858928B06CA /* WarpCore */,
+			);
+			productName = "WarpDropShare-macOS";
+			productReference = 9294CFA607A64766127B8C27 /* WarpDropShare-macOS.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		A4082FF312D1397EA0D644ED /* WarpDrop-iOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D413D9D5B2F47C0F7F7213F7 /* Build configuration list for PBXNativeTarget "WarpDrop-iOS" */;
+			buildPhases = (
+				960766C867C0A22E7CDEC91E /* Sources */,
+				15E105E9BEB87D0D5DABD5EC /* Resources */,
+				51BC7F7AD317CF1688954F40 /* Frameworks */,
+				BF92731275FC3E7DD579AD1E /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				8F36A91BB47A9E8C6944A179 /* PBXTargetDependency */,
+				D47A3BD25953BD9E8C19C314 /* PBXTargetDependency */,
+			);
+			name = "WarpDrop-iOS";
+			packageProductDependencies = (
+				A8D74E6D6D1AB88AF06550D3 /* WarpCore */,
+			);
+			productName = "WarpDrop-iOS";
+			productReference = AC6D776F45B17BE9E2C1A71A /* WarpDrop-iOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+		E56F76580DF22BDE8DF69F10 /* WarpDrop-macOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A3F348AC58F31953E31FC8C6 /* Build configuration list for PBXNativeTarget "WarpDrop-macOS" */;
+			buildPhases = (
+				FAB2CDD57CEE3AED64D3E23C /* Sources */,
+				F6FE434A0A0FA914EC1BB9CF /* Resources */,
+				C6DB39EA854C006A025BBF74 /* Frameworks */,
+				4B1A8BA1D826991F23502DC9 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				FE734D58FC55DD3BB00B8308 /* PBXTargetDependency */,
+			);
+			name = "WarpDrop-macOS";
+			packageProductDependencies = (
+				B89562A5AC05A706CE8B0899 /* WarpCore */,
+			);
+			productName = "WarpDrop-macOS";
+			productReference = 0F0988B3F467663E8940F1B3 /* WarpDrop-macOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		C7818309942C3BA1330AD6DF /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					31038AFF9B487788B82689D6 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+					7B01B15D6CCF89BFFAFE957B = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+					7F67EF870894CC49D91903C3 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+					A4082FF312D1397EA0D644ED = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+					E56F76580DF22BDE8DF69F10 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 4E8228159580665036AB8FAE /* Build configuration list for PBXProject "WarpDrop" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+				it,
+			);
+			mainGroup = 01E396472DA454FFCCEE2D48;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				0ECCA751ECC183CE9F6870F3 /* XCLocalSwiftPackageReference "WarpCore" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = CDF774A398C3727B1A8B8D8F /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				E56F76580DF22BDE8DF69F10 /* WarpDrop-macOS */,
+				7F67EF870894CC49D91903C3 /* WarpDropShare-macOS */,
+				A4082FF312D1397EA0D644ED /* WarpDrop-iOS */,
+				31038AFF9B487788B82689D6 /* WarpDropShare-iOS */,
+				7B01B15D6CCF89BFFAFE957B /* WarpDropLiveActivity */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		15E105E9BEB87D0D5DABD5EC /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				16A39937A020F148712DF628 /* InfoPlist.xcstrings in Resources */,
+				662706CBDFBF35D8B06A4B9F /* Localizable.xcstrings in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		3ADA51DA9B9B480A552168E9 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F06C4632B8335BDF212FF3DE /* InfoPlist.xcstrings in Resources */,
+				131ED402BC94F513B888C623 /* Localizable.xcstrings in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F204FBB2E4B592CB66641D44 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				174D724ADBBAEC91DDC56E91 /* InfoPlist.xcstrings in Resources */,
+				7AFEA1BF50123BD215105A72 /* Localizable.xcstrings in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F6879A1D5969029417B6AFAA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E3900040A1DE47306DB37283 /* InfoPlist.xcstrings in Resources */,
+				A6CA946D358D68B3182D7B1E /* Localizable.xcstrings in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F6FE434A0A0FA914EC1BB9CF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				10290FFD71E42BB0C2DBC855 /* InfoPlist.xcstrings in Resources */,
+				64F7F94F3E40C00C26BC2212 /* Localizable.xcstrings in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		20D27CDA41872F57E708E8C6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FF6DAABBBF6F4354448977D1 /* Theme.swift in Sources */,
+				827C20C40ED6FE3AFD2188E1 /* TransferActivityAttributes.swift in Sources */,
+				305CC5888C9150B24C2760EB /* TransferLiveActivity.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8A4FFB5316F1F183B6161F63 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E57587F5EEB3C481B7EAAF4E /* AppGroup.swift in Sources */,
+				062B1795FD818E645EC1E730 /* BonjourAdvertiser.swift in Sources */,
+				BC0A4C84C2B99100D6BB4F89 /* BonjourBrowser.swift in Sources */,
+				A0DD937C413D570D697BA0B4 /* CodeEntryField.swift in Sources */,
+				8DF0B000A8D23ABB929AA188 /* Components.swift in Sources */,
+				A1F2345CD68C8FD77CE40412 /* EventBridge.swift in Sources */,
+				01ED106F007ECE9D2139A0CF /* IdentityStore.swift in Sources */,
+				FAC87C11CC006D8F7C7BA1D5 /* Localizer.swift in Sources */,
+				ECFEDB563FD1032459E19BB8 /* PeerCache.swift in Sources */,
+				B030B8613AC6165439526B00 /* SendPayload.swift in Sources */,
+				0376562616C43F14EA6EBC88 /* ShareModel.swift in Sources */,
+				290BCB20EE47B446A7104BFD /* ShareView.swift in Sources */,
+				994999A480D2FF74FB4B4D2D /* ShareViewController.swift in Sources */,
+				9007D7D63585C7AF6278C0C6 /* Theme.swift in Sources */,
+				4EA03B8F0D5FB85F461D5B40 /* TransferActivityAttributes.swift in Sources */,
+				CE02DF7D1B10642E8F50AF18 /* TransferStatus.swift in Sources */,
+				338106A84F8EE83329C0D90E /* WarpFormatting.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		960766C867C0A22E7CDEC91E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA2381C4CAB12869CFAC861F /* AppGroup.swift in Sources */,
+				D4B2E75DB7964D33A503E659 /* AppModel.swift in Sources */,
+				EDDA9E3FB199FD8F82EAFAD2 /* BonjourAdvertiser.swift in Sources */,
+				6388927CE5D6F8E2BB0BDC20 /* BonjourBrowser.swift in Sources */,
+				071D6572EC331B8FB80D9F5F /* CodeBarView.swift in Sources */,
+				2C1AC31F00F32CE59F395761 /* CodeEntryField.swift in Sources */,
+				8CCE44DF2C934D88D3C1FD57 /* Components.swift in Sources */,
+				B988AA33C2B59F5CB9C5271E /* DeviceViews.swift in Sources */,
+				3F77608F2C6C66F44D438D04 /* EventBridge.swift in Sources */,
+				A3E1972E9D12E343BFD961A1 /* ICloudTrustSync.swift in Sources */,
+				645C1E8B1C4B8D7C4E38735B /* IdentityStore.swift in Sources */,
+				6F94615157FDBC67C03BAA83 /* LinkDeviceSheet.swift in Sources */,
+				F507DB57E279CB8988CFB8F7 /* LiveActivityController.swift in Sources */,
+				C1264E09A86A86888B1C7DF3 /* Localizer.swift in Sources */,
+				7418B09405CBC2592FC66838 /* MainView.swift in Sources */,
+				3985F0C417DB02A7C1D3678F /* Notifier.swift in Sources */,
+				4D2342DAE848BC954A13C97B /* OfferSheet.swift in Sources */,
+				3C6A9E5E4CC37CFFA0B96A35 /* PeerCache.swift in Sources */,
+				D9DDD23E4712E0A3F58BCC59 /* PlatformServices.swift in Sources */,
+				9908E1D452D0C449A4C4CC83 /* QRScannerSheet.swift in Sources */,
+				56C913037BE5727948961823 /* QuickCodeView.swift in Sources */,
+				CA346361AA6450D8852BFDE6 /* SendPayload.swift in Sources */,
+				EEC7773AD9C2B181C6E8AFB3 /* SettingsStore.swift in Sources */,
+				4B986443F82B61A91B7AEC13 /* SettingsView.swift in Sources */,
+				DA5540CE55F929A1B111ECCD /* Theme.swift in Sources */,
+				2B07B3098DE52C4F85FF8294 /* TransferActivityAttributes.swift in Sources */,
+				CAEF3DB18CB42F2821484AA7 /* TransferHUD.swift in Sources */,
+				9222993D81B4295009097382 /* TransferStatus.swift in Sources */,
+				9DC3B8D35D1CA119EBBC42B5 /* WarpDropIOSApp.swift in Sources */,
+				F6E4C67095DDAD3C1865B33B /* WarpFormatting.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F0D255C193A8BC9539131762 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				81843D62B8F5868C2410D01E /* AppGroup.swift in Sources */,
+				923923160DAABC6DF70AC4B4 /* BonjourAdvertiser.swift in Sources */,
+				73D85BB7A917D149D09A24D7 /* BonjourBrowser.swift in Sources */,
+				E484E43F32A3F1434AB68BC2 /* CodeEntryField.swift in Sources */,
+				CC2DE6C39B0559EA19BD330C /* Components.swift in Sources */,
+				E1DBDC5933C76FB59E794BB5 /* EventBridge.swift in Sources */,
+				5CE70BADA17E082DE86D8CA0 /* IdentityStore.swift in Sources */,
+				3C60E0D78DEC91BED70B541A /* Localizer.swift in Sources */,
+				1D413BDE429F9203CCEDE93C /* PeerCache.swift in Sources */,
+				A1664532EC89365DDD9E9C85 /* SendPayload.swift in Sources */,
+				EAEABD2D8206634341121A40 /* ShareModel.swift in Sources */,
+				8BE11D63F817F9031961747D /* ShareView.swift in Sources */,
+				B33C73CC832528486B7C9D3C /* ShareViewController.swift in Sources */,
+				F22096DB3C8FFF05AB237B07 /* Theme.swift in Sources */,
+				BF4E96829AD8E2BD8315133C /* TransferActivityAttributes.swift in Sources */,
+				F877F3D09F601D4FEC1E7ED2 /* TransferStatus.swift in Sources */,
+				1FF3530257B2CF4EFA408D5E /* WarpFormatting.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FAB2CDD57CEE3AED64D3E23C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5846B4D5EE2C0F5B128E0A06 /* AppDelegate.swift in Sources */,
+				9BEC6EC5535CB89F35C2876D /* AppGroup.swift in Sources */,
+				C85F6419E84A02B5A5BB36AB /* AppModel.swift in Sources */,
+				76E01FFE36DA2294BABB1D12 /* BonjourAdvertiser.swift in Sources */,
+				16F8EC394DF5E8BD81CD0C5D /* BonjourBrowser.swift in Sources */,
+				7565168CB8F7DC50F950DB49 /* CodeBarView.swift in Sources */,
+				F22D59D555D8DA056D691CFD /* CodeEntryField.swift in Sources */,
+				A52CE169F461A66C6C5050A4 /* Components.swift in Sources */,
+				66ECED98DCC203DD4E87D98D /* DeviceViews.swift in Sources */,
+				20E291F4684DA9D6E4BA0254 /* EventBridge.swift in Sources */,
+				CCF24004C203E45790F0C2AD /* ICloudTrustSync.swift in Sources */,
+				BA817D1463556378E44B3236 /* IdentityStore.swift in Sources */,
+				27542E2623F44D10A64512BB /* LinkDeviceSheet.swift in Sources */,
+				9CA8A2EBD23585120DBCDD43 /* Localizer.swift in Sources */,
+				D33C6F6420A0F8F48F0CC18F /* MacMainView.swift in Sources */,
+				206EA2186000580BC28E7F9E /* MainView.swift in Sources */,
+				8FFE0DB48CB1D8A4E895B788 /* Notifier.swift in Sources */,
+				D45DE459FF5CA5651F5BF7C7 /* OfferSheet.swift in Sources */,
+				60537C18F89068F9CF6B0593 /* PeerCache.swift in Sources */,
+				C4E5C5930727AF13BA830418 /* PlatformServices.swift in Sources */,
+				C9D52D24D65ACF02C53FE9C9 /* QuickCodeView.swift in Sources */,
+				9E5141C609A7A0E0CED08755 /* RadarView.swift in Sources */,
+				EE294DDDBFBA3D97CE17124B /* SendPayload.swift in Sources */,
+				AF17C5AAB69C7A38B4C493D0 /* SettingsStore.swift in Sources */,
+				2D1A6A94AAB6E963338594D2 /* SettingsView.swift in Sources */,
+				65D6BA9EC0173C8082321F6B /* StatusItemController.swift in Sources */,
+				1479EEE9CC48D7E6574448B6 /* Theme.swift in Sources */,
+				26EC27DF357DFDF3B24DFC45 /* TransferActivityAttributes.swift in Sources */,
+				3AF28F2CA6BF8EC141E7E5A2 /* TransferHUD.swift in Sources */,
+				BFE7053542D176311F952F70 /* TransferStatus.swift in Sources */,
+				40B6FFCA591EEDEEB3F9597A /* WarpDropMacApp.swift in Sources */,
+				95CEC8C7377ED8D2928FF82F /* WarpFormatting.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		8F36A91BB47A9E8C6944A179 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 31038AFF9B487788B82689D6 /* WarpDropShare-iOS */;
+			targetProxy = F5604DA40736E0D287CD9229 /* PBXContainerItemProxy */;
+		};
+		D47A3BD25953BD9E8C19C314 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 7B01B15D6CCF89BFFAFE957B /* WarpDropLiveActivity */;
+			targetProxy = 912FB6AE1159F7269A5794FC /* PBXContainerItemProxy */;
+		};
+		FE734D58FC55DD3BB00B8308 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 7F67EF870894CC49D91903C3 /* WarpDropShare-macOS */;
+			targetProxy = 772A1F0CA02E127BFEDB9DD1 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		049D03886CC406F2B0C1402A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				"WARP_APP_GROUP[sdk=iphoneos*]" = group.com.warpdrop.shared;
+				"WARP_APP_GROUP[sdk=iphonesimulator*]" = group.com.warpdrop.shared;
+				"WARP_APP_GROUP[sdk=macosx*]" = "$(TeamIdentifierPrefix)com.warpdrop.shared";
+				WARP_KEYCHAIN_GROUP = "$(AppIdentifierPrefix)com.warpdrop.shared";
+			};
+			name = Debug;
+		};
+		05F6599956F85752CCE081E8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = ShareExtension/iOS/WarpDropShare.entitlements;
+				INFOPLIST_FILE = ShareExtension/iOS/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+				PRODUCT_BUNDLE_IDENTIFIER = com.warpdrop.WarpDrop.Share;
+				PRODUCT_NAME = WarpDropShare;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		0B686CCA78FA0AAEFDF15911 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				INFOPLIST_FILE = LiveActivity/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+				PRODUCT_BUNDLE_IDENTIFIER = com.warpdrop.WarpDrop.LiveActivity;
+				PRODUCT_NAME = WarpDropLiveActivity;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		214B514B2C16DC0F3A2360BC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_PREVIEWS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				"WARP_APP_GROUP[sdk=iphoneos*]" = group.com.warpdrop.shared;
+				"WARP_APP_GROUP[sdk=iphonesimulator*]" = group.com.warpdrop.shared;
+				"WARP_APP_GROUP[sdk=macosx*]" = "$(TeamIdentifierPrefix)com.warpdrop.shared";
+				WARP_KEYCHAIN_GROUP = "$(AppIdentifierPrefix)com.warpdrop.shared";
+			};
+			name = Release;
+		};
+		4E526B244F10101241368EF2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = ShareExtension/macOS/WarpDropShare.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = ShareExtension/macOS/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks @executable_path/../../../../Frameworks";
+				PRODUCT_BUNDLE_IDENTIFIER = com.warpdrop.WarpDrop.Share;
+				PRODUCT_NAME = WarpDropShare;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		5BF0530496E05BBA6A92FB17 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = ShareExtension/macOS/WarpDropShare.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = ShareExtension/macOS/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks @executable_path/../../../../Frameworks";
+				PRODUCT_BUNDLE_IDENTIFIER = com.warpdrop.WarpDrop.Share;
+				PRODUCT_NAME = WarpDropShare;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		6785D88F3646C881D07A4AB3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = ShareExtension/iOS/WarpDropShare.entitlements;
+				INFOPLIST_FILE = ShareExtension/iOS/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+				PRODUCT_BUNDLE_IDENTIFIER = com.warpdrop.WarpDrop.Share;
+				PRODUCT_NAME = WarpDropShare;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		7DEDD4A32C2CF59528EB404C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				CODE_SIGN_ENTITLEMENTS = macOS/WarpDrop.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = macOS/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
+				PRODUCT_BUNDLE_IDENTIFIER = com.warpdrop.WarpDrop;
+				PRODUCT_NAME = WarpDrop;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		8C864C118F5E2375519AF6E6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				CODE_SIGN_ENTITLEMENTS = iOS/WarpDrop.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = iOS/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				PRODUCT_BUNDLE_IDENTIFIER = com.warpdrop.WarpDrop;
+				PRODUCT_NAME = WarpDrop;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		A90CB0C0A5791EE10F761077 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				CODE_SIGN_ENTITLEMENTS = macOS/WarpDrop.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = macOS/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
+				PRODUCT_BUNDLE_IDENTIFIER = com.warpdrop.WarpDrop;
+				PRODUCT_NAME = WarpDrop;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		AFAFE12B83A5EF3336F51862 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				CODE_SIGN_ENTITLEMENTS = iOS/WarpDrop.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = iOS/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				PRODUCT_BUNDLE_IDENTIFIER = com.warpdrop.WarpDrop;
+				PRODUCT_NAME = WarpDrop;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		BF4F04DF170880C580683227 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				INFOPLIST_FILE = LiveActivity/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+				PRODUCT_BUNDLE_IDENTIFIER = com.warpdrop.WarpDrop.LiveActivity;
+				PRODUCT_NAME = WarpDropLiveActivity;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		4E8228159580665036AB8FAE /* Build configuration list for PBXProject "WarpDrop" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				049D03886CC406F2B0C1402A /* Debug */,
+				214B514B2C16DC0F3A2360BC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		8E8F786F67639A0A09488588 /* Build configuration list for PBXNativeTarget "WarpDropShare-macOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4E526B244F10101241368EF2 /* Debug */,
+				5BF0530496E05BBA6A92FB17 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		A3F348AC58F31953E31FC8C6 /* Build configuration list for PBXNativeTarget "WarpDrop-macOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7DEDD4A32C2CF59528EB404C /* Debug */,
+				A90CB0C0A5791EE10F761077 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		D413D9D5B2F47C0F7F7213F7 /* Build configuration list for PBXNativeTarget "WarpDrop-iOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AFAFE12B83A5EF3336F51862 /* Debug */,
+				8C864C118F5E2375519AF6E6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		D558654C24CCC5E773981382 /* Build configuration list for PBXNativeTarget "WarpDropShare-iOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				05F6599956F85752CCE081E8 /* Debug */,
+				6785D88F3646C881D07A4AB3 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		E58E83301D5D29A19E881ED9 /* Build configuration list for PBXNativeTarget "WarpDropLiveActivity" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BF4F04DF170880C580683227 /* Debug */,
+				0B686CCA78FA0AAEFDF15911 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		0ECCA751ECC183CE9F6870F3 /* XCLocalSwiftPackageReference "WarpCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = WarpCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		2BDD460307BF1A00467BFC7A /* WarpCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = WarpCore;
+		};
+		4A7348DB03E8A858928B06CA /* WarpCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = WarpCore;
+		};
+		A8D74E6D6D1AB88AF06550D3 /* WarpCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = WarpCore;
+		};
+		B89562A5AC05A706CE8B0899 /* WarpCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = WarpCore;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = C7818309942C3BA1330AD6DF /* Project object */;
+}

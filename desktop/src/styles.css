@@ -1,0 +1,263 @@
+@import "tailwindcss";
+
+/* ---- Design tokens (docs/design-system.md) ---- */
+:root {
+  --bg: #f6f6f7;
+  --surface: #ffffff;
+  --surface-hover: #f1f1f3;
+  --border: rgba(0, 0, 0, 0.08);
+  --text: #111113;
+  --text-secondary: #6b6b73;
+  --text-tertiary: #9a9aa3;
+  --accent: #2f6bff;
+  --accent-soft: rgba(47, 107, 255, 0.1);
+  --success: #1f9d55;
+  --warning: #c27c0e;
+  --danger: #d93d3d;
+  --cable: #c27c0e;
+  --scrim: rgba(17, 17, 19, 0.28);
+  --spring: cubic-bezier(0.2, 0.8, 0.2, 1);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141416;
+    --surface: #1c1c1f;
+    --surface-hover: #232327;
+    --border: rgba(255, 255, 255, 0.08);
+    --text: #ededef;
+    --text-secondary: #9a9aa3;
+    --text-tertiary: #6b6b73;
+    --accent: #4c82ff;
+    --accent-soft: rgba(76, 130, 255, 0.16);
+    --success: #34c26f;
+    --warning: #e0a030;
+    --danger: #f06262;
+    --cable: #e0a030;
+    --scrim: rgba(0, 0, 0, 0.45);
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-cable: var(--cable);
+  --font-sans: "Inter Variable", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --radius-card: 12px;
+  --radius-control: 8px;
+  --radius-badge: 6px;
+  --ease-spring: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* ---- Typography scale ---- */
+@utility type-title {
+  font-size: 20px;
+  line-height: 26px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+@utility type-section {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+}
+@utility type-body {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 400;
+}
+@utility type-caption {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+}
+@utility type-code {
+  font-size: 28px;
+  line-height: 34px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+/* 1 px inner border instead of elevation. */
+@utility hairline {
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+/* ---- Base ---- */
+html,
+body,
+#root {
+  height: 100%;
+}
+html {
+  background: var(--bg);
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 20px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "cv11", "ss01";
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+  overflow: hidden;
+}
+input,
+textarea {
+  user-select: text;
+  -webkit-user-select: text;
+}
+button {
+  cursor: default;
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Native materials: let the window's vibrancy / Mica show through. Surfaces
+   (cards, fields, sheets) stay opaque so contrast never depends on the wallpaper. */
+html[data-material="vibrancy"],
+html[data-material="vibrancy"] body,
+html[data-material="mica"],
+html[data-material="mica"] body {
+  background: transparent;
+}
+html[data-material="acrylic"],
+html[data-material="acrylic"] body {
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+}
+
+/* ---- Motion ---- */
+@keyframes searching-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.searching-dot {
+  animation: searching-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes spring-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.spring-in {
+  animation: spring-in 280ms var(--spring) both;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.fade-in {
+  animation: fade-in 180ms ease-out both;
+}
+
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.sheet-in {
+  animation: sheet-in 280ms var(--spring) both;
+}
+
+@keyframes panel-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+.panel-in {
+  animation: panel-in 280ms var(--spring) both;
+}
+
+.progress-fill {
+  transition: width 150ms linear, background-color 150ms linear;
+}
+
+.device-card {
+  transition:
+    transform 280ms var(--spring),
+    background-color 280ms var(--spring),
+    box-shadow 280ms var(--spring),
+    opacity 280ms var(--spring);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .searching-dot {
+    animation: none;
+    opacity: 0.7;
+  }
+  .device-card {
+    transform: none !important;
+  }
+}
+
+/* Thin, unobtrusive scrollbars. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 10px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+  background-clip: content-box;
+}

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <!-- Generated UniFFI bindings: findings there are not actionable. -->
+    <issue id="all">
+        <ignore path="src/main/java/uniffi/**" />
+    </issue>
+    <!-- strings.xml is generated from the cross-platform i18n/strings.json, which
+         also carries desktop-only keys (menu bar, drag & drop, launch at login). -->
+    <issue id="UnusedResources">
+        <ignore path="src/main/res/values/strings.xml" />
+        <ignore path="src/main/res/values-it/strings.xml" />
+    </issue>
+</lint>

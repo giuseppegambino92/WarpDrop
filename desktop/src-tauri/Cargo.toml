@@ -1,0 +1,40 @@
+[package]
+name = "warpdrop-desktop"
+description = "WarpDrop for Windows and Linux (Tauri shell around the libwarp engine)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+default-run = "warpdrop-desktop"
+
+[lib]
+name = "warpdrop_desktop_lib"
+crate-type = ["rlib"]
+
+[[bin]]
+name = "warpdrop-desktop"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "=2.7.4", features = [] }
+
+[dependencies]
+libwarp = { path = "../../core-rust/libwarp" }
+tauri = { version = "=2.12.5", features = ["tray-icon", "macos-private-api"] }
+tauri-plugin-notification = "=2.8.1"
+tauri-plugin-dialog = "=2.8.4"
+tauri-plugin-opener = "=2.7.3"
+tauri-plugin-autostart = "=2.7.0"
+tauri-plugin-single-instance = "=2.5.5"
+window-vibrancy = "=0.8.1"
+serde.workspace = true
+serde_json.workspace = true
+parking_lot = "0.12"
+sys-locale = "0.3.2"
+whoami = { version = "=1.6.1", default-features = false }
+image = { version = "=0.25.10", default-features = false, features = ["png", "jpeg"] }
+
+[target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dependencies]
+arboard = { version = "=3.7.0", features = ["wayland-data-control"] }
+
+[target.'cfg(not(any(target_os = "linux", target_os = "freebsd")))'.dependencies]
+arboard = "=3.7.0"

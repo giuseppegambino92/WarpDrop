@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android-only strings (not part of the shared i18n/strings.json). -->
+<resources>
+    <string name="channel_status">Status</string>
+    <string name="channel_offers">Incoming requests</string>
+    <string name="channel_received">Received files</string>
+    <string name="channel_clipboard">Clipboard</string>
+    <string name="notif_ready">Ready to receive</string>
+    <string name="peer_unknown">the other device</string>
+    <string name="preparing">Preparing files…</string>
+    <string name="allow">Allow</string>
+    <string name="close">Close</string>
+    <string name="back">Back</string>
+    <string name="more">More</string>
+    <string name="sending_to">Sending to %1$s</string>
+    <string name="settings_version">Version</string>
+    <string name="language_english" translatable="false">English</string>
+    <string name="language_italian" translatable="false">Italiano</string>
+    <string name="link_waiting">Waiting for the other device…</string>
+    <string name="link_window_closed">Linking window closed</string>
+    <string name="error_folder_unreadable">Can\'t read this folder.</string>
+    <string name="error_file_unreadable">Can\'t read %1$s.</string>
+    <string name="error_engine_start">WarpDrop couldn\'t start: %1$s</string>
+    <string name="error_camera">The camera is not available.</string>
+    <string name="error_too_large">That is too large to send as clipboard.</string>
+    <string name="scan_hint">Point the camera at the QR code on the other device</string>
+    <string name="relay_applied">Relay server saved</string>
+    <plurals name="transfers_count">
+        <item quantity="one">%1$d transfer</item>
+        <item quantity="other">%1$d transfers</item>
+    </plurals>
+</resources>

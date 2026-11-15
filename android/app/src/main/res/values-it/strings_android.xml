@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="channel_status">Stato</string>
+    <string name="channel_offers">Richieste in arrivo</string>
+    <string name="channel_received">File ricevuti</string>
+    <string name="channel_clipboard">Appunti</string>
+    <string name="notif_ready">Pronto a ricevere</string>
+    <string name="peer_unknown">l\'altro dispositivo</string>
+    <string name="preparing">Preparazione dei file…</string>
+    <string name="allow">Consenti</string>
+    <string name="close">Chiudi</string>
+    <string name="back">Indietro</string>
+    <string name="more">Altro</string>
+    <string name="sending_to">Invio a %1$s</string>
+    <string name="settings_version">Versione</string>
+    <string name="link_waiting">In attesa dell\'altro dispositivo…</string>
+    <string name="link_window_closed">Collegamento chiuso</string>
+    <string name="error_folder_unreadable">Impossibile leggere questa cartella.</string>
+    <string name="error_file_unreadable">Impossibile leggere %1$s.</string>
+    <string name="error_engine_start">WarpDrop non è riuscito ad avviarsi: %1$s</string>
+    <string name="error_camera">La fotocamera non è disponibile.</string>
+    <string name="error_too_large">È troppo grande per essere inviato come appunti.</string>
+    <string name="scan_hint">Inquadra il codice QR sull\'altro dispositivo</string>
+    <string name="relay_applied">Server relay salvato</string>
+    <plurals name="transfers_count">
+        <item quantity="one">%1$d trasferimento</item>
+        <item quantity="many">%1$d trasferimenti</item>
+        <item quantity="other">%1$d trasferimenti</item>
+    </plurals>
+</resources>

@@ -1,0 +1,24 @@
+/target
+**/node_modules
+**/dist
+/apple/build
+/apple/Generated
+/apple/WarpCore/Frameworks
+/android/.gradle
+/android/**/build
+/android/local.properties
+/android/app/src/main/jniLibs
+/android/app/src/main/java/uniffi
+/desktop/src-tauri/target
+/desktop/src-tauri/gen
+.DS_Store
+*.warpdownload
+# Swift / Xcode
+**/.build
+**/.swiftpm
+**/xcuserdata
+*.xcuserstate
+# misc
+*.log
+.idea
+.vscode

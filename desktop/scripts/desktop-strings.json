@@ -1,0 +1,115 @@
+{
+  "_comment": "Desktop-only strings (Windows/Linux Tauri app). Merged with ../../i18n/strings.json by gen-i18n.mjs. Candidates for promotion to the canonical file.",
+  "close": {
+    "en": "Close",
+    "it": "Chiudi"
+  },
+  "copy": {
+    "en": "Copy",
+    "it": "Copia"
+  },
+  "copied": {
+    "en": "Copied",
+    "it": "Copiato"
+  },
+  "other_device": {
+    "en": "the other device",
+    "it": "l'altro dispositivo"
+  },
+  "unknown_device": {
+    "en": "Unknown device",
+    "it": "Dispositivo sconosciuto"
+  },
+  "this_computer": {
+    "en": "This computer",
+    "it": "Questo computer"
+  },
+  "clipboard_title": {
+    "en": "Clipboard",
+    "it": "Appunti"
+  },
+  "image_title": {
+    "en": "Image",
+    "it": "Immagine"
+  },
+  "tray_your_code": {
+    "en": "Your code: {0}",
+    "it": "Il tuo codice: {0}"
+  },
+  "tray_send_clipboard_to": {
+    "en": "Send Clipboard to {0}",
+    "it": "Invia appunti a {0}"
+  },
+  "staged_clear": {
+    "en": "Remove",
+    "it": "Rimuovi"
+  },
+  "link": {
+    "en": "Link",
+    "it": "Collega"
+  },
+  "linking": {
+    "en": "Linking…",
+    "it": "Collegamento…"
+  },
+  "link_waiting": {
+    "en": "Waiting for your other device…",
+    "it": "In attesa dell'altro dispositivo…"
+  },
+  "link_enter_code_body": {
+    "en": "On your other device choose “Link My Device” → “Show my code”, then type that code here.",
+    "it": "Sull'altro dispositivo scegli “Collega un mio dispositivo” → “Mostra il mio codice”, poi digita qui quel codice."
+  },
+  "settings_language_english": {
+    "en": "English",
+    "it": "English"
+  },
+  "settings_language_italian": {
+    "en": "Italiano",
+    "it": "Italiano"
+  },
+  "settings_relay_invalid": {
+    "en": "Use a ws:// or wss:// address, or leave it empty.",
+    "it": "Usa un indirizzo ws:// o wss://, oppure lascialo vuoto."
+  },
+  "settings_version": {
+    "en": "Version {0}",
+    "it": "Versione {0}"
+  },
+  "error_timeout": {
+    "en": "{0} didn't respond in time. Try again.",
+    "it": "{0} non ha risposto in tempo. Riprova."
+  },
+  "error_connection_lost": {
+    "en": "Connection lost. Try again.",
+    "it": "Connessione persa. Riprova."
+  },
+  "error_clipboard_read": {
+    "en": "Couldn't read the clipboard.",
+    "it": "Impossibile leggere gli appunti."
+  },
+  "error_pick_device": {
+    "en": "Pick a device first, or enter a code.",
+    "it": "Scegli prima un dispositivo oppure inserisci un codice."
+  },
+  "error_disk": {
+    "en": "Couldn't save the files: {0}",
+    "it": "Impossibile salvare i file: {0}"
+  },
+  "notif_failed_title": {
+    "en": "Transfer with {0} failed",
+    "it": "Trasferimento con {0} non riuscito"
+  },
+  "notif_offer_body": {
+    "en": "Open WarpDrop to accept or decline.",
+    "it": "Apri WarpDrop per accettare o rifiutare."
+  },
+  "error_rejected": {
+    "en": "{0} couldn't accept the transfer.",
+    "it": "{0} non ha potuto accettare il trasferimento."
+  },
+  "error_integrity": {
+    "en": "The data arrived damaged and was discarded. Try again.",
+    "it": "I dati sono arrivati danneggiati e sono stati scartati. Riprova."
+  }
+}
