@@ -128,7 +128,7 @@ jobs:
           find "$B" -maxdepth 2 -type f \( -name '*.msi' -o -name '*-setup.exe' -o -name '*.deb' -o -name '*.AppImage' \) -exec cp {} dist/ \;
           ls -la dist
           test -n "$(ls dist)"
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         with:
           name: warpdrop-${{ matrix.name }}
           path: dist/*
@@ -232,7 +232,7 @@ jobs:
           codesign --force --timestamp --sign "$IDENTITY" "$DMG"
           xcrun notarytool submit "$DMG" --apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
           xcrun stapler staple "$DMG"
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         with:
           name: warpdrop-macOS
           path: dist/*.dmg
@@ -302,7 +302,7 @@ jobs:
             ./gradlew --no-daemon :app:assembleDebug
             cp app/build/outputs/apk/debug/app-debug.apk "../dist/WarpDrop-${WARPDROP_VERSION:-dev}-android-debug.apk"
           fi
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         with:
           name: warpdrop-Android
           path: dist/*.apk
@@ -323,7 +323,7 @@ jobs:
           cargo build --release -p warp-signal -p warp-cli
           mkdir -p dist
           tar -C target/release -czf dist/warp-signal-linux-x86_64.tar.gz warp-signal warp
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         with:
           name: warpdrop-relay
           path: dist/*
