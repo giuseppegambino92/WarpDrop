@@ -251,7 +251,7 @@ jobs:
           set -euo pipefail
           SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKM" --licenses > /dev/null || true
-          "$SDKM" --install "platforms;android-37" "build-tools;37.0.0" > /dev/null
+          "$SDKM" --install "platforms;android-37.0" "build-tools;37.0.0" > /dev/null
           # Prefer the runner's preinstalled NDK; install one only if missing.
           NDK="${ANDROID_NDK_ROOT:-${ANDROID_NDK_LATEST_HOME:-}}"
           if [ -z "$NDK" ] || [ ! -d "$NDK" ]; then
