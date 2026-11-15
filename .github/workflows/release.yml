@@ -272,12 +272,13 @@ jobs:
       - name: Rust core → libwarp.so + Kotlin bindings
         run: ./scripts/build-android.sh
       - name: Release keystore
-        if: env.ANDROID_KEYSTORE != ''
         env:
           ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
         run: |
-          echo "$ANDROID_KEYSTORE" | base64 --decode > "$RUNNER_TEMP/release.jks"
-          echo "WARPDROP_KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          if [ -n "$ANDROID_KEYSTORE" ]; then
+            echo "$ANDROID_KEYSTORE" | base64 --decode > "$RUNNER_TEMP/release.jks"
+            echo "WARPDROP_KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          fi
       - name: Build APK
         working-directory: android
         env:
