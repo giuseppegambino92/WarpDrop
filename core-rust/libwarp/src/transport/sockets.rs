@@ -26,6 +26,22 @@ pub const RELAY_MAGIC: &[u8; 4] = b"WRP1";
 pub const RELAY_PROBE: u8 = 1;
 pub const RELAY_PROBE_ACK: u8 = 2;
 pub const RELAY_DATA: u8 = 3;
+/// Authenticated (re)binding, see `warp-signal`: `header | MAC(bind_key, observed address)`.
+pub const RELAY_BIND: u8 = 4;
+/// From the relay: DATA arrived from an address it does not trust; `header | observed address`.
+pub const RELAY_NEED_BIND: u8 = 5;
+pub const RELAY_BIND_ACK: u8 = 6;
+const BIND_CONTEXT: &[u8] = b"warpdrop relay bind v1";
+
+/// Proves to the relay that this address belongs to the holder of `key`.
+pub fn relay_bind_mac(key: &[u8; 32], session: &[u8; 16], side: u8, observed: &SocketAddr) -> [u8; 32] {
+    let mut h = blake3::Hasher::new_keyed(key);
+    h.update(BIND_CONTEXT);
+    h.update(session);
+    h.update(&[side]);
+    h.update(observed.to_string().as_bytes());
+    *h.finalize().as_bytes()
+}
 /// magic(4) | type(1) | session(16) | side(1)
 pub const RELAY_HDR: usize = 22;
 
@@ -43,6 +59,8 @@ pub struct RelaySocket {
     relay: SocketAddr,
     session: [u8; 16],
     side: u8,
+    /// Per-session secret from the relay (absent on older relays).
+    bind_key: Option<[u8; 32]>,
     buf: Mutex<Vec<u8>>,
 }
 
@@ -53,15 +71,57 @@ impl fmt::Debug for RelaySocket {
 }
 
 impl RelaySocket {
-    pub fn new(io: tokio::net::UdpSocket, relay: SocketAddr, session: [u8; 16], side: u8) -> Arc<Self> {
-        Arc::new(RelaySocket { io, relay, session, side, buf: Mutex::new(vec![0u8; 65536]) })
+    pub fn new(io: tokio::net::UdpSocket, relay: SocketAddr, session: [u8; 16], side: u8, bind_key: Option<[u8; 32]>) -> Arc<Self> {
+        Arc::new(RelaySocket { io, relay, session, side, bind_key, buf: Mutex::new(vec![0u8; 65536]) })
     }
 
-    /// Registers this socket's address with the relay (empty DATA packet).
+    fn bind_packet(&self, key: &[u8; 32], observed: &SocketAddr) -> Vec<u8> {
+        let mut pkt = relay_header(RELAY_BIND, &self.session, self.side).to_vec();
+        pkt.extend_from_slice(&relay_bind_mac(key, &self.session, self.side, observed));
+        pkt
+    }
+
+    /// Registers this socket's address with the relay: with a MAC over the
+    /// address the relay observes (learned with a probe) when the relay handed
+    /// out a bind key, otherwise with an empty DATA packet (older relays).
     pub async fn bind_on_relay(&self) -> io::Result<()> {
-        let h = relay_header(RELAY_DATA, &self.session, self.side);
-        self.io.send_to(&h, self.relay).await?;
+        let legacy = relay_header(RELAY_DATA, &self.session, self.side);
+        let Some(key) = self.bind_key else {
+            for _ in 0..3 {
+                self.io.send_to(&legacy, self.relay).await?;
+            }
+            return Ok(());
+        };
+        let probe = relay_header(RELAY_PROBE, &self.session, self.side);
+        let mut buf = [0u8; 256];
+        for _ in 0..5 {
+            self.io.send_to(&probe, self.relay).await?;
+            let deadline = tokio::time::Instant::now() + std::time::Duration::from_millis(400);
+            while let Ok(Ok((n, from))) = tokio::time::timeout_at(deadline, self.io.recv_from(&mut buf)).await {
+                if from != self.relay || n < RELAY_HDR || &buf[..4] != RELAY_MAGIC || buf[5..21] != self.session {
+                    continue;
+                }
+                match buf[4] {
+                    RELAY_PROBE_ACK => {
+                        let Ok(observed) = std::str::from_utf8(&buf[RELAY_HDR..n]).unwrap_or("").parse() else { continue };
+                        self.io.send_to(&self.bind_packet(&key, &observed), self.relay).await?;
+                    }
+                    RELAY_BIND_ACK => return Ok(()),
+                    _ => {}
+                }
+            }
+        }
+        // Not confirmed (packet loss): the relay still accepts a first,
+        // unauthenticated binding, and NEED_BIND repairs it later.
+        self.io.send_to(&legacy, self.relay).await?;
         Ok(())
+    }
+
+    /// Answers a NEED_BIND from the relay (our NAT mapping changed).
+    fn rebind(&self, pkt: &[u8]) {
+        let Some(key) = self.bind_key else { return };
+        let Ok(observed) = std::str::from_utf8(&pkt[RELAY_HDR..]).unwrap_or("").parse() else { return };
+        let _ = self.io.try_send_to(&self.bind_packet(&key, &observed), self.relay);
     }
 
     pub fn relay_addr(&self) -> SocketAddr {
@@ -96,12 +156,14 @@ impl AsyncUdpSocket for RelaySocket {
             let mut rb = ReadBuf::new(&mut tmp[..]);
             let from = ready!(self.io.poll_recv_from(cx, &mut rb))?;
             let pkt = rb.filled();
-            if from != self.relay
-                || pkt.len() <= RELAY_HDR
-                || &pkt[..4] != RELAY_MAGIC
-                || pkt[4] != RELAY_DATA
-                || pkt[5..21] != self.session
-            {
+            if from != self.relay || pkt.len() <= RELAY_HDR || &pkt[..4] != RELAY_MAGIC || pkt[5..21] != self.session {
+                continue;
+            }
+            if pkt[4] == RELAY_NEED_BIND {
+                self.rebind(pkt);
+                continue;
+            }
+            if pkt[4] != RELAY_DATA {
                 continue;
             }
             let payload = &pkt[RELAY_HDR..];

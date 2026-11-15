@@ -12,6 +12,7 @@
 pub mod compress;
 pub mod discovery;
 pub mod error;
+pub mod fsx;
 pub mod hashing;
 pub mod identity;
 pub mod manifest;

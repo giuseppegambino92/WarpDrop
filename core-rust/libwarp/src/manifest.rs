@@ -6,8 +6,9 @@ use crate::hashing::chunk_count;
 use crate::types::SendItem;
 use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use unicode_normalization::UnicodeNormalization;
 use std::time::UNIX_EPOCH;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -262,19 +263,99 @@ pub fn safe_join(root: &Path, rel: &str) -> Result<PathBuf> {
     Ok(out)
 }
 
+/// Upper bounds for an incoming manifest, checked before anything is allocated
+/// per entry or per chunk.
+pub const MAX_ENTRIES: usize = 1_000_000;
+const MAX_PATH_BYTES: usize = 4096;
+/// 1 PiB. The receiver additionally checks free disk space before accepting.
+pub const MAX_TOTAL_BYTES: u64 = 1 << 50;
+
 pub fn validate(m: &Manifest) -> Result<()> {
     if m.entries.is_empty() {
         bail!("empty manifest");
     }
-    let tmp = Path::new("/");
-    let mut seen = HashSet::new();
+    if m.entries.len() > MAX_ENTRIES {
+        bail!("too many entries in manifest ({})", m.entries.len());
+    }
+    let mut total: u64 = 0;
     for e in &m.entries {
-        safe_join(tmp, &e.path)?;
-        if !seen.insert(e.path.as_str()) {
+        if e.path.len() > MAX_PATH_BYTES {
+            bail!("path too long in manifest");
+        }
+        // Chunk indices travel as u32.
+        if e.chunks() > u32::MAX as u64 {
+            bail!("file too large: {}", e.path);
+        }
+        total = total.checked_add(e.size()).filter(|t| *t <= MAX_TOTAL_BYTES).ok_or_else(|| anyhow!("transfer too large"))?;
+    }
+    local_paths(m).map(|_| ())
+}
+
+/// Comparison key for a sanitized path: Unicode-normalized and case-folded,
+/// because macOS (APFS) and Windows (NTFS) treat `é`/`é` and `A`/`a` as the
+/// same name.
+fn fold(s: &str) -> String {
+    s.nfc().collect::<String>().to_lowercase()
+}
+
+/// `name` with a ` (n)` suffix before the extension, kept within 255 bytes.
+fn numbered(name: &str, n: u32) -> String {
+    let (stem, ext) = match name.rfind('.') {
+        Some(i) if i > 0 => (&name[..i], &name[i..]),
+        _ => (name, ""),
+    };
+    let suffix = format!(" ({n}){ext}");
+    let mut cut = stem.len().min(255usize.saturating_sub(suffix.len()));
+    while !stem.is_char_boundary(cut) {
+        cut -= 1;
+    }
+    format!("{}{suffix}", &stem[..cut])
+}
+
+/// Maps every manifest entry to the relative path it is written to on this
+/// device. Components are sanitized; names that become identical after
+/// sanitizing, Unicode normalization or case folding get a ` (2)` suffix
+/// instead of silently landing on the same file. A renamed folder carries its
+/// children with it. Rejects traversal, duplicates and entries whose parent
+/// folder is missing or is a file.
+pub fn local_paths(m: &Manifest) -> Result<Vec<PathBuf>> {
+    let root = Path::new("");
+    // Original path → (mapped relative path, folded key, is_dir).
+    let mut mapped: HashMap<&str, (String, String, bool)> = HashMap::with_capacity(m.entries.len());
+    let mut taken: HashSet<String> = HashSet::with_capacity(m.entries.len());
+    let mut out = Vec::with_capacity(m.entries.len());
+    for e in &m.entries {
+        safe_join(root, &e.path)?;
+        if mapped.contains_key(e.path.as_str()) {
             bail!("duplicate path in manifest: {}", e.path);
         }
+        let (parent, name) = match e.path.rsplit_once('/') {
+            Some((parent, name)) => {
+                let Some((dir, key, is_dir)) = mapped.get(parent) else {
+                    bail!("missing parent folder in manifest: {}", e.path);
+                };
+                if !is_dir {
+                    bail!("parent is a file in manifest: {}", e.path);
+                }
+                (Some((dir.clone(), key.clone())), name)
+            }
+            None => (None, e.path.as_str()),
+        };
+        let clean = sanitize_component(name);
+        let join = |n: &str| match &parent {
+            Some((dir, key)) => (format!("{dir}/{n}"), format!("{key}/{}", fold(n))),
+            None => (n.to_string(), fold(n)),
+        };
+        let (mut path, mut key) = join(&clean);
+        let mut n = 2;
+        while !taken.insert(key.clone()) {
+            (path, key) = join(&numbered(&clean, n));
+            n += 1;
+        }
+        out.push(PathBuf::from(&path));
+        mapped.insert(e.path.as_str(), (path, key, matches!(e.kind, EntryKind::Dir)));
     }
-    Ok(())
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -311,6 +392,66 @@ mod tests {
         assert_eq!(m.title(), "Photos");
         validate(&m).unwrap();
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    fn file(path: &str) -> Entry {
+        Entry { path: path.into(), kind: EntryKind::File { size: 1, mtime_ms: 0, executable: false } }
+    }
+    fn dir(path: &str) -> Entry {
+        Entry { path: path.into(), kind: EntryKind::Dir }
+    }
+    fn mapped(entries: Vec<Entry>) -> Result<Vec<String>> {
+        let m = Manifest { entries };
+        validate(&m)?;
+        Ok(local_paths(&m)?.iter().map(|p| p.to_string_lossy().replace('\\', "/")).collect())
+    }
+
+    #[test]
+    fn names_that_sanitize_alike_do_not_collide() {
+        let p = mapped(vec![file("report:2026.txt"), file("report?2026.txt"), file("report_2026.txt")]).unwrap();
+        assert_eq!(p, ["report_2026.txt", "report_2026 (2).txt", "report_2026 (3).txt"]);
+    }
+
+    #[test]
+    fn case_and_unicode_variants_do_not_collide() {
+        let nfc = "caf\u{e9}.txt";
+        let nfd = "cafe\u{301}.txt";
+        let p = mapped(vec![file("Readme.md"), file("README.md"), file(nfc), file(nfd)]).unwrap();
+        assert_eq!(p[0], "Readme.md");
+        assert_eq!(p[1], "README (2).md");
+        assert_eq!(p[2], nfc);
+        assert_eq!(p[3], "cafe\u{301} (2).txt");
+    }
+
+    #[test]
+    fn renamed_folder_carries_its_children() {
+        let p = mapped(vec![dir("Photos"), file("Photos/a.jpg"), dir("photos"), file("photos/a.jpg")]).unwrap();
+        assert_eq!(p, ["Photos", "Photos/a.jpg", "photos (2)", "photos (2)/a.jpg"]);
+    }
+
+    #[test]
+    fn rejects_bad_structure() {
+        assert!(mapped(vec![file("a"), file("a")]).is_err(), "exact duplicate");
+        assert!(mapped(vec![file("a/b")]).is_err(), "missing parent");
+        assert!(mapped(vec![file("a"), file("a/b")]).is_err(), "parent is a file");
+        assert!(mapped(vec![dir("x"), file("x/../y")]).is_err(), "traversal");
+    }
+
+    #[test]
+    fn rejects_absurd_sizes() {
+        let huge = |size| Entry { path: "big".into(), kind: EntryKind::File { size, mtime_ms: 0, executable: false } };
+        assert!(validate(&Manifest { entries: vec![huge(u64::MAX)] }).is_err());
+        assert!(validate(&Manifest { entries: vec![huge(MAX_TOTAL_BYTES + 1)] }).is_err());
+        let two = vec![huge(MAX_TOTAL_BYTES), Entry { path: "b".into(), kind: EntryKind::File { size: 1, mtime_ms: 0, executable: false } }];
+        assert!(validate(&Manifest { entries: two }).is_err(), "sum overflow");
+        assert!(validate(&Manifest { entries: vec![huge(10 << 30)] }).is_ok());
+    }
+
+    #[test]
+    fn numbered_names_stay_within_255_bytes() {
+        let long = format!("{}.txt", "x".repeat(251));
+        let n = numbered(&long, 12);
+        assert!(n.len() <= 255 && n.ends_with(" (12).txt"), "{n}");
     }
 
     #[test]

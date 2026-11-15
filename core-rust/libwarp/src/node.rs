@@ -958,6 +958,25 @@ struct OfferCtx {
     via_rendezvous: bool,
 }
 
+/// Whether what is still missing of this transfer fits in the free space of
+/// the download volume. Unknown free space counts as "fits".
+async fn fits_on_disk(download_dir: PathBuf, peer_key: &[u8; 32], manifest: &Manifest) -> bool {
+    let stage = download_dir.join(PARTIAL_DIR).join(receiver::staging_key(peer_key, manifest));
+    let total = manifest.total_bytes();
+    tokio::task::spawn_blocking(move || {
+        let staged: u64 = walkdir::WalkDir::new(&stage)
+            .into_iter()
+            .flatten()
+            .filter_map(|e| e.metadata().ok())
+            .filter(|m| m.is_file())
+            .map(|m| m.len())
+            .sum();
+        crate::fsx::available_space(&download_dir).is_none_or(|free| total.saturating_sub(staged) <= free)
+    })
+    .await
+    .unwrap_or(true)
+}
+
 async fn serve_transfer(
     inner: &Arc<Inner>,
     conn: quinn::Connection,
@@ -973,6 +992,10 @@ async fn serve_transfer(
     if let Err(e) = manifest::validate(&manifest) {
         reject(&conn, &mut send, "invalid_manifest").await?;
         return Err(e);
+    }
+    if !fits_on_disk(inner.download_dir(), &peer_key, &manifest).await {
+        // Also bounds the receiver's per-chunk bookkeeping by real disk size.
+        return reject(&conn, &mut send, "no_space").await;
     }
     let fingerprint = manifest.fingerprint();
     if resume_manifest.is_some_and(|m| m != fingerprint) {

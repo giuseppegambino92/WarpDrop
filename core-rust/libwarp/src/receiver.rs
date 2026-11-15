@@ -8,11 +8,14 @@
 //! offered back to the sender as "already have".
 //!
 //! When every file's merged BLAKE3 root matches the sender's, the top-level
-//! items are renamed into the download directory (same filesystem → atomic).
+//! items are renamed into the download directory (same filesystem → atomic),
+//! never over an existing name, and all or nothing.
 
 use crate::compress::{decompress, ENC_RAW, ENC_ZSTD};
 use crate::hashing::{chunk_count, chunk_hash, chunk_len, file_root, CHUNK_SIZE};
-use crate::manifest::{safe_join, validate, EntryKind, Manifest};
+use crate::error::WarpError;
+use crate::fsx;
+use crate::manifest::{local_paths, validate, EntryKind, Manifest};
 use crate::protocol::{close, read_msg, write_msg, FrameHeader, HaveChunk, Msg, FRAME_HEADER_LEN};
 use crate::sender::read_exact_at;
 use crate::transfer::Transfer;
@@ -56,6 +59,9 @@ pub fn staging_key(peer_key: &[u8; 32], m: &Manifest) -> String {
 
 struct State {
     manifest: Manifest,
+    /// Where each manifest entry lives, relative to `stage` (and later to the
+    /// download directory): sanitized and collision-free.
+    paths: Vec<PathBuf>,
     stage: PathBuf,
     hashes: Mutex<Vec<Vec<Option<[u8; 32]>>>>,
     remaining: AtomicU64,
@@ -81,10 +87,10 @@ fn write_at(f: &std::fs::File, buf: &[u8], offset: u64) -> std::io::Result<()> {
 }
 
 /// Prepares the staging area and figures out which chunks are already present.
-fn prepare(stage: &Path, m: &Manifest) -> Result<Vec<HaveChunk>> {
+fn prepare(stage: &Path, m: &Manifest, paths: &[PathBuf]) -> Result<Vec<HaveChunk>> {
     std::fs::create_dir_all(stage)?;
-    for e in &m.entries {
-        let p = safe_join(stage, &e.path)?;
+    for (e, rel) in m.entries.iter().zip(paths) {
+        let p = stage.join(rel);
         match e.kind {
             EntryKind::Dir => std::fs::create_dir_all(&p)?,
             EntryKind::File { .. } => {
@@ -108,7 +114,7 @@ fn prepare(stage: &Path, m: &Manifest) -> Result<Vec<HaveChunk>> {
             continue;
         }
         // Trust the disk, not the log.
-        let path = safe_join(stage, &e.path)?;
+        let path = stage.join(&paths[entry as usize]);
         let Ok(f) = std::fs::File::open(&path) else { continue };
         let len = chunk_len(size, chunk as u64) as usize;
         let mut buf = vec![0u8; len];
@@ -148,9 +154,10 @@ pub async fn receive(
 ) -> Result<Received> {
     let Job { manifest, stage, download_dir, ticket } = job;
     validate(&manifest)?;
+    let paths = local_paths(&manifest)?;
     let have = {
-        let (stage, m) = (stage.clone(), manifest.clone());
-        tokio::task::spawn_blocking(move || prepare(&stage, &m)).await??
+        let (stage, m, paths) = (stage.clone(), manifest.clone(), paths.clone());
+        tokio::task::spawn_blocking(move || prepare(&stage, &m, &paths)).await??
     };
 
     let mut hashes: Vec<Vec<Option<[u8; 32]>>> = manifest.entries.iter().map(|e| vec![None; e.chunks() as usize]).collect();
@@ -166,6 +173,7 @@ pub async fn receive(
         remaining: AtomicU64::new(total_chunks - have.len() as u64),
         hashes: Mutex::new(hashes),
         manifest,
+        paths,
         notify: Notify::new(),
         failure: Mutex::new(None),
     });
@@ -220,16 +228,22 @@ pub async fn receive(
         tracing::debug!("all chunks stored, finalizing");
         t.set_state(TransferState::Verifying);
         let st = state.clone();
-        let saved = tokio::task::spawn_blocking(move || finalize(&st, &roots, &download_dir)).await?;
-        match saved {
+        if let Err(e) = tokio::task::spawn_blocking(move || verify(&st, &roots)).await? {
+            let _ = write_msg(ctrl_send, &Msg::Result { ok: false, error: Some(format!("{e:#}")) }).await;
+            // Content mismatch: never resume from this staging area.
+            let _ = std::fs::remove_dir_all(&state.stage);
+            return Err(e);
+        }
+        let st = state.clone();
+        match tokio::task::spawn_blocking(move || place(&st, &download_dir)).await? {
             Ok(paths) => {
                 write_msg(ctrl_send, &Msg::Result { ok: true, error: None }).await?;
                 Ok(Received { saved_paths: paths })
             }
             Err(e) => {
+                // Verified data stays staged (nothing was left half-moved),
+                // so sending the same items again completes instantly.
                 let _ = write_msg(ctrl_send, &Msg::Result { ok: false, error: Some(format!("{e:#}")) }).await;
-                // Content mismatch: never resume from this staging area.
-                let _ = std::fs::remove_dir_all(&state.stage);
                 Err(e)
             }
         }
@@ -272,7 +286,7 @@ async fn handle_stream(mut s: quinn::RecvStream, state: &Arc<State>, t: &Arc<Tra
         let wire = (FRAME_HEADER_LEN + payload.len()) as u64;
 
         let st = state.clone();
-        let path = safe_join(&state.stage, &entry.path)?;
+        let path = state.stage.join(&state.paths[h.entry as usize]);
         tokio::task::spawn_blocking(move || -> Result<()> {
             let data = match h.enc {
                 ENC_RAW => payload,
@@ -283,8 +297,12 @@ async fn handle_stream(mut s: quinn::RecvStream, state: &Arc<State>, t: &Arc<Tra
             if hash != h.hash {
                 bail!("chunk {}/{} of {} failed verification", h.chunk, n, entry.path);
             }
+            // Duplicate (e.g. sent twice across a reconnect). Two copies of the
+            // same chunk may race past this check; that is harmless: both
+            // write identical, already verified bytes to the same offset, the
+            // log tolerates repeats, and `remaining` drops once (below).
             if st.hashes.lock()[h.entry as usize][h.chunk as usize].is_some() {
-                return Ok(()); // duplicate (e.g. sent twice across a reconnect)
+                return Ok(());
             }
             let f = std::fs::OpenOptions::new().write(true).create(true).truncate(false).open(&path)?;
             write_at(&f, &data, h.chunk as u64 * CHUNK_SIZE)?;
@@ -314,22 +332,9 @@ async fn handle_stream(mut s: quinn::RecvStream, state: &Arc<State>, t: &Arc<Tra
     }
 }
 
-fn unique_dest(dir: &Path, name: &str) -> PathBuf {
-    let first = dir.join(name);
-    if !first.exists() {
-        return first;
-    }
-    let (stem, ext) = match name.rfind('.') {
-        Some(i) if i > 0 => (&name[..i], &name[i..]),
-        _ => (name, ""),
-    };
-    (2..)
-        .map(|n| dir.join(format!("{stem} ({n}){ext}")))
-        .find(|p| !p.exists())
-        .expect("unbounded search")
-}
-
-fn finalize(state: &State, roots: &[[u8; 32]], download_dir: &Path) -> Result<Vec<String>> {
+/// Checks every file against the sender's BLAKE3 roots and applies size,
+/// mtime and permissions. Nothing is moved yet.
+fn verify(state: &State, roots: &[[u8; 32]]) -> Result<()> {
     let m = &state.manifest;
     if roots.len() != m.entries.len() {
         bail!("root count mismatch");
@@ -345,7 +350,7 @@ fn finalize(state: &State, roots: &[[u8; 32]], download_dir: &Path) -> Result<Ve
         if root != roots[i] {
             bail!("BLAKE3 mismatch for {}", e.path);
         }
-        let p = safe_join(&state.stage, &e.path)?;
+        let p = state.stage.join(&state.paths[i]);
         let f = std::fs::OpenOptions::new().write(true).create(true).truncate(false).open(&p)?;
         f.set_len(size)?;
         if mtime_ms > 0 {
@@ -359,17 +364,34 @@ fn finalize(state: &State, roots: &[[u8; 32]], download_dir: &Path) -> Result<Ve
         #[cfg(not(unix))]
         let _ = executable;
     }
+    Ok(())
+}
+
+/// Moves the top-level items into the download directory, each under a name
+/// that is free at that instant (atomic no-replace rename, never
+/// overwriting). All or nothing: if one move fails, the items already moved
+/// go back into staging.
+fn place(state: &State, download_dir: &Path) -> Result<Vec<String>> {
     std::fs::create_dir_all(download_dir).context("creating download directory")?;
-    let mut saved = vec![];
-    for top in m.top_level() {
-        let from = safe_join(&state.stage, top)?;
-        let name = from.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-        let to = unique_dest(download_dir, &name);
-        std::fs::rename(&from, &to).with_context(|| format!("moving {} into place", to.display()))?;
-        saved.push(to.to_string_lossy().into_owned());
+    let tops = state.manifest.entries.iter().zip(&state.paths).filter(|(e, _)| !e.path.contains('/')).map(|(_, rel)| rel);
+    let mut moved: Vec<(PathBuf, PathBuf)> = vec![];
+    for rel in tops {
+        let from = state.stage.join(rel);
+        let name = rel.to_string_lossy();
+        match fsx::move_unique(&from, download_dir, &name) {
+            Ok(to) => moved.push((from, to)),
+            Err(e) => {
+                for (from, to) in moved.iter().rev() {
+                    if let Err(e) = fsx::rename_noreplace(to, from) {
+                        tracing::warn!("could not roll back {}: {e}", to.display());
+                    }
+                }
+                return Err(WarpError::io(format!("cannot save {name} in {}: {e}", download_dir.display())).into());
+            }
+        }
     }
     let _ = std::fs::remove_dir_all(&state.stage);
-    Ok(saved)
+    Ok(moved.into_iter().map(|(_, to)| to.to_string_lossy().into_owned()).collect())
 }
 
 /// Removes staging areas untouched for a week.
@@ -387,5 +409,61 @@ pub fn cleanup_stale(download_dir: &Path) {
         if old {
             let _ = std::fs::remove_dir_all(e.path());
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn state(stage: PathBuf, entries: Vec<crate::manifest::Entry>) -> State {
+        let manifest = Manifest { entries };
+        let paths = local_paths(&manifest).unwrap();
+        State {
+            hashes: Mutex::new(vec![vec![]; manifest.entries.len()]),
+            manifest,
+            paths,
+            stage,
+            remaining: AtomicU64::new(0),
+            notify: Notify::new(),
+            failure: Mutex::new(None),
+        }
+    }
+
+    fn file(path: &str) -> crate::manifest::Entry {
+        crate::manifest::Entry { path: path.into(), kind: EntryKind::File { size: 1, mtime_ms: 0, executable: false } }
+    }
+
+    #[test]
+    fn place_never_overwrites_and_renames_collisions() {
+        let d = tempfile::tempdir().unwrap();
+        let (stage, dl) = (d.path().join("stage"), d.path().join("dl"));
+        std::fs::create_dir_all(&stage).unwrap();
+        std::fs::create_dir_all(&dl).unwrap();
+        std::fs::write(dl.join("report_2026.txt"), b"mine").unwrap();
+        let st = state(stage.clone(), vec![file("report:2026.txt"), file("report?2026.txt")]);
+        std::fs::write(stage.join(&st.paths[0]), b"A").unwrap();
+        std::fs::write(stage.join(&st.paths[1]), b"B").unwrap();
+
+        let saved = place(&st, &dl).unwrap();
+        assert_eq!(std::fs::read(dl.join("report_2026.txt")).unwrap(), b"mine", "existing file untouched");
+        let got: Vec<Vec<u8>> = saved.iter().map(|p| std::fs::read(p).unwrap()).collect();
+        assert_eq!(got, [b"A".to_vec(), b"B".to_vec()], "both arrive, neither overwritten");
+        assert_eq!(saved.iter().collect::<HashSet<_>>().len(), 2);
+        assert!(!stage.exists());
+    }
+
+    #[test]
+    fn place_is_all_or_nothing() {
+        let d = tempfile::tempdir().unwrap();
+        let (stage, dl) = (d.path().join("stage"), d.path().join("dl"));
+        std::fs::create_dir_all(&stage).unwrap();
+        let st = state(stage.clone(), vec![file("first.txt"), file("second.txt")]);
+        std::fs::write(stage.join("first.txt"), b"1").unwrap();
+        // "second.txt" is missing from staging, so its move fails.
+        let err = place(&st, &dl).unwrap_err();
+        assert!(matches!(err.downcast_ref::<WarpError>(), Some(WarpError::Io { .. })), "{err:#}");
+        assert!(!dl.join("first.txt").exists(), "first item rolled back");
+        assert_eq!(std::fs::read(stage.join("first.txt")).unwrap(), b"1", "and kept in staging");
     }
 }

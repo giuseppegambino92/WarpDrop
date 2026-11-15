@@ -46,9 +46,20 @@ pub enum ClientMsg {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "t", rename_all = "snake_case")]
 pub enum ServerMsg {
-    Paired { session: String, side: u8, udp_port: u16 },
+    Paired {
+        session: String,
+        side: u8,
+        udp_port: u16,
+        /// Secret for authenticated UDP binding (relays since 1.0.1).
+        #[serde(default)]
+        bind_key: Option<String>,
+    },
     Signal { session: String, data: Candidates },
-    Error { code: String },
+    Error {
+        code: String,
+        #[serde(default)]
+        channel: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -72,7 +83,15 @@ struct Session {
     id: [u8; 16],
     side: u8,
     relay_udp: SocketAddr,
+    bind_key: Option<[u8; 32]>,
 }
+
+fn parse_bind_key(k: Option<&str>) -> Option<[u8; 32]> {
+    hex::decode(k?).ok()?.try_into().ok()
+}
+
+/// Concurrent rendezvous sessions a listener serves; extra pairings are ignored.
+const MAX_LISTENER_SESSIONS: usize = 16;
 
 fn ws_url(base: &str) -> String {
     let b = base.trim_end_matches('/');
@@ -146,10 +165,8 @@ async fn prepare(s: &Session, ifs: &InterfaceTable) -> Result<Prepared> {
     let public = probe(&direct, s).await;
     let port = direct.local_addr()?.port();
     let relay_io = tokio::net::UdpSocket::from_std(bind_udp_v4()?)?;
-    let relay = RelaySocket::new(relay_io, s.relay_udp, s.id, s.side);
-    for _ in 0..3 {
-        relay.bind_on_relay().await?;
-    }
+    let relay = RelaySocket::new(relay_io, s.relay_udp, s.id, s.side, s.bind_key);
+    relay.bind_on_relay().await?;
     Ok(Prepared {
         direct: direct.into_std()?,
         relay,
@@ -206,10 +223,16 @@ async fn listener_once(
     let mut sessions: std::collections::HashMap<String, mpsc::UnboundedSender<Candidates>> = Default::default();
     // What the server currently has for this connection.
     let mut sent = ListenSet::default();
-    let sync = |want: &ListenSet, sent: &mut ListenSet| -> Result<()> {
+    // Argon2id hash of `sent.code`, kept to re-send it without recomputing.
+    let mut code_channel = String::new();
+    // Channels another connection still holds ("channel_busy"), retried below.
+    let mut busy: Vec<(String, bool)> = vec![];
+    let mut retry = tokio::time::interval(Duration::from_secs(10));
+    let sync = |want: &ListenSet, sent: &mut ListenSet, code_channel: &mut String| -> Result<()> {
         let gone = || anyhow!("relay writer gone");
         if want.code != sent.code {
             let channel = crate::pake::rendezvous_channel(&want.code)?;
+            *code_channel = channel.clone();
             out_tx.send(ClientMsg::Listen { channel, persistent: false }).map_err(|_| gone())?;
         }
         for ch in want.resume.iter().filter(|c| !sent.resume.contains(c)) {
@@ -221,24 +244,39 @@ async fn listener_once(
         *sent = want.clone();
         Ok(())
     };
-    sync(&code_rx.borrow_and_update().clone(), &mut sent)?;
+    sync(&code_rx.borrow_and_update().clone(), &mut sent, &mut code_channel)?;
     let result = loop {
         tokio::select! {
             changed = code_rx.changed() => {
                 if changed.is_err() { break Ok(()); }
                 let want = code_rx.borrow_and_update().clone();
-                sync(&want, &mut sent)?;
+                sync(&want, &mut sent, &mut code_channel)?;
+            }
+            _ = retry.tick(), if !busy.is_empty() => {
+                // E.g. our own previous connection that the server has not
+                // noticed is dead yet. Only channels we still want.
+                for (channel, persistent) in busy.drain(..) {
+                    let wanted = if persistent { sent.resume.contains(&channel) } else { channel == code_channel };
+                    if wanted {
+                        out_tx.send(ClientMsg::Listen { channel, persistent }).map_err(|_| anyhow!("relay writer gone"))?;
+                    }
+                }
             }
             msg = stream.next() => {
                 let Some(msg) = msg else { break Err(anyhow!("relay closed the connection")) };
                 let Message::Text(t) = msg? else { continue };
                 let Ok(m) = serde_json::from_str::<ServerMsg>(t.as_str()) else { continue };
                 match m {
-                    ServerMsg::Paired { session, side, udp_port } => {
+                    ServerMsg::Paired { session, side, udp_port, bind_key } => {
+                        sessions.retain(|_, tx| !tx.is_closed());
+                        if sessions.len() >= MAX_LISTENER_SESSIONS {
+                            tracing::debug!("relay: too many concurrent sessions, ignoring pairing");
+                            continue;
+                        }
                         let (tx, rx) = mpsc::unbounded_channel();
                         sessions.insert(session.clone(), tx);
                         let relay_udp = relay_host_addr(relay_url, udp_port).await?;
-                        let s = Session { id: parse_session(&session)?, side, relay_udp };
+                        let s = Session { id: parse_session(&session)?, side, relay_udp, bind_key: parse_bind_key(bind_key.as_deref()) };
                         let (server, ifs, on_conn, out) = (server.clone(), ifs.clone(), on_conn.clone(), out_tx.clone());
                         tokio::spawn(async move {
                             if let Err(e) = serve_session(s, session, rx, out, server, &ifs, force_relay, on_conn).await {
@@ -250,7 +288,11 @@ async fn listener_once(
                     ServerMsg::Signal { session, data } => {
                         if let Some(tx) = sessions.get(&session) { let _ = tx.send(data); }
                     }
-                    ServerMsg::Error { code } => tracing::debug!("relay error: {code}"),
+                    ServerMsg::Error { code, channel: Some(channel) } if code == "channel_busy" => {
+                        let persistent = channel != code_channel;
+                        busy.push((channel, persistent));
+                    }
+                    ServerMsg::Error { code, .. } => tracing::debug!("relay error: {code}"),
                 }
             }
         }
@@ -360,12 +402,17 @@ pub async fn dial(
     let send = |m: ClientMsg| Message::text(serde_json::to_string(&m).unwrap_or_default());
     sink.send(send(ClientMsg::Connect { channel })).await?;
 
-    let (session_hex, side, udp_port) = match next_msg(&mut stream).await? {
-        ServerMsg::Paired { session, side, udp_port } => (session, side, udp_port),
-        ServerMsg::Error { code } if code == "no_listener" => return Err(WarpError::CodeNotFound.into()),
+    let (session_hex, side, udp_port, bind_key) = match next_msg(&mut stream).await? {
+        ServerMsg::Paired { session, side, udp_port, bind_key } => (session, side, udp_port, bind_key),
+        ServerMsg::Error { code, .. } if code == "no_listener" => return Err(WarpError::CodeNotFound.into()),
         other => bail!("unexpected relay message: {other:?}"),
     };
-    let s = Session { id: parse_session(&session_hex)?, side, relay_udp: relay_host_addr(relay_url, udp_port).await? };
+    let s = Session {
+        id: parse_session(&session_hex)?,
+        side,
+        relay_udp: relay_host_addr(relay_url, udp_port).await?,
+        bind_key: parse_bind_key(bind_key.as_deref()),
+    };
     let p = prepare(&s, ifs).await?;
     sink.send(send(ClientMsg::Signal { session: session_hex, data: p.mine.clone() })).await?;
     let peer = loop {

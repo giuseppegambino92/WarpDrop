@@ -56,10 +56,28 @@ Encryption and authentication are identical on both.
   show 4 SAS emoji derived from the TLS exporter.
 * **Relay**: sees an Argon2id hash of the code (memory-hard, so codes can't be
   reversed within their lifetime), public addresses, and QUIC ciphertext.
+  It is hardened against abuse: channels are first come, first served (a live
+  listener is never replaced), bounded per-client queues, per-connection
+  `Connect` rate limit, per-IP WebSocket cap, global session/listener caps,
+  30 s expiry for sessions that never carried traffic, and WebSocket pings to
+  free channels of dead clients. A UDP relay side can only move to a new
+  address with a **BIND** packet carrying `BLAKE3-keyed(bind_key, session,
+  side, observed address)`, where `bind_key` is handed to that client alone
+  over the WebSocket; knowing the session id is not enough to redirect or cut
+  off traffic. (v1.0.0 clients without bind keys still work: their first
+  packet binds.)
 * **Integrity**: every 4 MiB chunk is a BLAKE3 subtree verified on arrival;
   per-file roots are the standard BLAKE3 hash (`b3sum`-identical) and must
   match before anything leaves the staging area. Manifest paths are validated
-  (no traversal, Windows-reserved names sanitised).
+  (no traversal, Windows-reserved names sanitised, every parent folder
+  declared), and names that would land on the same file after sanitising,
+  Unicode normalization or case folding are renamed `name (2)` instead.
+  Incoming manifests are bounded (1 M entries, 1 PiB) and refused up front if
+  they don't fit in the free disk space.
+* **Hand-off**: verified items move into the download folder with an atomic
+  no-replace rename (`renamex_np` / `renameat2` / `MoveFileExW`), so an
+  existing file is never overwritten, and all or nothing: if one move fails the
+  others are rolled back and stay staged.
 
 ### Transfer engine
 * Folders stream **on the fly** (no zip): manifest + chunk frames over N
@@ -84,7 +102,7 @@ Encryption and authentication are identical on both.
 
 | Check | Result |
 |---|---|
-| `cargo test --workspace` | **35 passed**: libwarp 16 unit + 11 end-to-end + 2 resume, desktop 6 |
+| `cargo test --workspace` | **50 passed**: libwarp 26 unit + 11 end-to-end + 2 resume + 5 relay abuse, desktop 6 |
 | `cargo clippy --workspace --all-targets` | 0 warnings |
 | End-to-end tests | code reaches a late-discovered device among decoys · LAN discovery (mDNS + beacon) · code pairing + nested folder bit-for-bit (BLAKE3) · QR ticket · wrong code rejected + rotation · Link My Device + zero-prompt send + ring gossip · stranger prompt + SAS · clipboard · Internet rendezvous direct **and** forced relay · ADB-style USB tunnel · pause/resume/cancel |
 | Resume tests | LAN: connection dropped after 6/11 chunks → automatic reconnect, ≥ 20 MiB skipped, each byte received once. **Internet**: same drop on a rendezvous-only session (hole-punched *and* forced relay) → reconnects via the resumption ticket, no new code, no prompt |
