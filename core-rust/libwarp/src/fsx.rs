@@ -3,20 +3,19 @@
 //!
 //! Guarantees, and where they stop:
 //! * Atomic (the "is the name free?" check and the move are one system
-//!   call): APFS, HFS+ and, on macOS, any filesystem supporting
-//!   `RENAME_EXCL`; ext4, XFS, Btrfs, F2FS (Android), tmpfs on Linux
-//!   (`RENAME_NOREPLACE`); every filesystem on Windows (`MoveFileExW`
-//!   without `MOVEFILE_REPLACE_EXISTING`).
+//!   call): APFS and HFS+ (`RENAME_EXCL`); on Linux ext4, XFS, Btrfs, F2FS,
+//!   tmpfs and also FAT32/exFAT (`RENAME_NOREPLACE`); every filesystem on
+//!   Windows (`MoveFileExW` without `MOVEFILE_REPLACE_EXISTING`).
 //! * Elsewhere `fallback` is used. Files: a hard link, also atomic (a link
-//!   never replaces), where the filesystem has them (NFS, ntfs-3g and other
-//!   FUSE filesystems usually do). Without hard links (FAT and exFAT on macOS
-//!   and Linux) and for folders: the name is claimed with an empty
-//!   placeholder and the item is renamed over it after checking it is still
-//!   that placeholder (`reserve_then_rename`). This never replaces a file
-//!   another program *saved* under that name, but it is not atomic against a
-//!   program that deliberately swaps the placeholder in the instant before
-//!   the rename. A crash in that instant leaves the empty placeholder behind
-//!   (the item stays staged and is saved under the next free name).
+//!   never replaces), where the filesystem has them (NFS and ntfs-3g on
+//!   Linux, measured in CI). Without hard links (FAT and exFAT on macOS) and
+//!   for folders: the name is claimed with an empty placeholder and the item
+//!   is renamed over it after checking it is still that placeholder
+//!   (`reserve_then_rename`). For folders this cannot lose data (a folder
+//!   rename only replaces an empty folder); for files on macOS FAT/exFAT a
+//!   few-microsecond window remains, see there. A crash in that instant
+//!   leaves the empty placeholder behind (the item stays staged and is saved
+//!   under the next free name).
 //!
 //! CI runs the receiving side on ext4, XFS, Btrfs, FAT32, exFAT, NTFS
 //! (ntfs-3g, FUSE), NFS and tmpfs and prints which of these paths each one
@@ -386,16 +385,15 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         let p = |n: &str| d.path().join(n);
         std::fs::write(p("a"), b"a").unwrap();
-        let atomic = match sys::rename_noreplace(&p("a"), &p("b")) {
-            Ok(()) => "atomic no-replace rename".to_string(),
-            Err(e) => format!("no atomic no-replace rename ({e})"),
-        };
         std::fs::write(p("c"), b"c").unwrap();
-        let links = match std::fs::hard_link(p("c"), p("d")) {
-            Ok(()) => "hard links: files atomic, folders via checked placeholder".to_string(),
-            Err(e) => format!("no hard links ({e}): files and folders via checked placeholder"),
+        let caps = match sys::rename_noreplace(&p("a"), &p("b")) {
+            Ok(()) => "atomic no-replace rename (files and folders)".to_string(),
+            Err(e) => match std::fs::hard_link(p("c"), p("d")) {
+                Ok(()) => format!("no atomic no-replace rename ({e}): files via hard link (atomic), folders via checked placeholder"),
+                Err(e2) => format!("no atomic no-replace rename ({e}), no hard links ({e2}): files and folders via checked placeholder"),
+            },
         };
-        println!("FS-CAPABILITIES: {atomic}; {links}");
+        println!("FS-CAPABILITIES: {caps}");
     }
 
     /// What `reserve_then_rename`'s residual window rests on for folders:

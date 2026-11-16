@@ -118,21 +118,22 @@ Encryption and authentication are identical on both.
   its folders on APFS, HFS+, exFAT and FAT32 (macOS disk images) and in CI on
   ext4, XFS, Btrfs, FAT32, exFAT, NTFS via ntfs-3g (FUSE), NFS 4.2 and tmpfs
   (`scripts/test-filesystems.sh`, which also prints the path each takes).
-  The no-replace rename is one atomic system call on APFS/HFS+, ext4, XFS,
-  Btrfs, F2FS, tmpfs and on every Windows filesystem. Elsewhere files fall
-  back to a hard link (also atomic) where the filesystem has them (NFS,
-  ntfs-3g); without hard links (FAT/exFAT on macOS and Linux) and for
-  folders the name is claimed with an empty placeholder, and the item is
-  renamed over it only after checking it is still that placeholder (same
-  device and inode as the handle that created it, still empty). That never
-  replaces a file another program saved under the name, but it is **not
-  atomic**. For folders the residual window cannot lose data (a folder
-  rename only ever replaces an empty folder). For files on FAT/exFAT, a
-  process that deletes the placeholder and creates its own file under that
-  name in the microseconds between the check and the rename, or writes into
-  the placeholder in that instant, would have that file replaced; no system
-  call on those filesystems closes this. A crash in that instant leaves only
-  the empty placeholder.
+  The no-replace rename is one atomic system call on APFS/HFS+, on Linux
+  ext4, XFS, Btrfs, F2FS, tmpfs and also FAT32/exFAT, and on every Windows
+  filesystem (measured per filesystem in CI). Elsewhere files fall back to a
+  hard link, also atomic, where the filesystem has them (NFS and ntfs-3g on
+  Linux). Without hard links (FAT/exFAT on macOS) and for folders the name
+  is claimed with an empty placeholder, and the item is renamed over it only
+  after checking it is still that placeholder (same device and inode as the
+  handle that created it, still empty). That never replaces a file another
+  program saved under the name, but it is **not atomic**. For folders the
+  residual window cannot lose data (a folder rename only ever replaces an
+  empty folder). For files, which only go this way on FAT/exFAT under macOS,
+  a process that deletes the placeholder and creates its own file under
+  that name in the microseconds between the check and the rename, or writes
+  into the placeholder in that instant, would have that file replaced; macOS
+  offers no system call on those filesystems that closes this. A crash in
+  that instant leaves only the empty placeholder.
 * **Hand-off journal is untrusted input**: an entry is used only if its key
   is a top-level item of the current transfer and its destination a direct
   child of the download folder; anything else is dropped and the journal
