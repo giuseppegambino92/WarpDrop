@@ -67,7 +67,13 @@ fn code_pairing_transfers_nested_directory_bit_for_bit() {
     let saved = std::path::PathBuf::from(&inc.saved_paths[0]);
     assert_eq!(saved.file_name().unwrap(), "Progetto Vacanze ☀️");
     assert_eq!(tree_digest(&saved), before, "received tree differs from source");
-    assert!(!b.downloads().join(".warpdrop-partial").read_dir().unwrap().any(|_| true), "staging not cleaned");
+    // Only bookkeeping (kept 30 min for idempotent retries), no item data.
+    let leftover: Vec<_> = walkdir::WalkDir::new(b.downloads().join(".warpdrop-partial"))
+        .into_iter()
+        .flatten()
+        .filter(|e| e.file_type().is_file() && !e.file_name().to_string_lossy().starts_with('.'))
+        .collect();
+    assert!(leftover.is_empty(), "staging not cleaned: {leftover:?}");
 
     // The code is single-use.
     assert_ne!(b.node.current_code().code, code.code);

@@ -72,6 +72,22 @@ const LOG_RECORD: usize = 4 + 4 + 32;
 /// neither re-sent nor saved a second time.
 const PLACED_LOG: &str = ".placed";
 
+/// Written (durably) once every item is saved. The staging area then holds
+/// only the journal and the chunk log, and is kept for `COMPLETE_TTL` so that
+/// a retry of the very same transfer (e.g. our "done" never reached the
+/// sender) is answered from it instead of saving everything again. A crash
+/// while cleaning up therefore cannot cause duplicates either.
+const COMPLETE_MARK: &str = ".complete";
+const COMPLETE_TTL: Duration = Duration::from_secs(30 * 60);
+
+fn completed_long_ago(stage: &Path) -> bool {
+    std::fs::metadata(stage.join(COMPLETE_MARK))
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.elapsed().ok())
+        .is_some_and(|age| age > COMPLETE_TTL)
+}
+
 /// Top-level item (relative path, one component) → where it was saved.
 type Placed = HashMap<PathBuf, PathBuf>;
 
@@ -174,7 +190,12 @@ fn write_at(f: &std::fs::File, buf: &[u8], offset: u64) -> std::io::Result<()> {
 /// Prepares the staging area and figures out which chunks are already present
 /// (in staging, or in items an interrupted hand-off already saved).
 fn prepare(stage: &Path, m: &Manifest, paths: &[PathBuf]) -> Result<(Vec<HaveChunk>, Placed)> {
+    if completed_long_ago(stage) {
+        // Same items sent again later: a new, independent copy.
+        std::fs::remove_dir_all(stage)?;
+    }
     std::fs::create_dir_all(stage)?;
+    let _ = std::fs::remove_file(stage.join(COMPLETE_MARK));
     let mut placed = read_placed(stage);
     let journaled = placed.len();
     // Still in staging → never moved; gone from the destination → nothing to count.
@@ -534,22 +555,51 @@ fn place(state: &State, download_dir: &Path) -> Result<Vec<String>> {
             }
             fsx::rename_noreplace(from, to)
         };
-        return place_with(state, download_dir, rename, |_, _| Err(std::io::Error::other("injected fault")));
+        return place_with(state, download_dir, rename, |_, _| Err(std::io::Error::other("injected fault")), &|| {});
     }
-    place_with(state, download_dir, fsx::rename_noreplace, fsx::rename_noreplace)
+    place_with(state, download_dir, fsx::rename_noreplace, fsx::rename_noreplace, &|| {})
 }
 
+/// `step` is called between every two durable effects (crash-injection tests
+/// abort the process there).
 fn place_with(
     state: &State,
     download_dir: &Path,
     rename: impl Fn(&Path, &Path) -> std::io::Result<()>,
     move_back: impl Fn(&Path, &Path) -> std::io::Result<()>,
+    step: &dyn Fn(),
 ) -> Result<Vec<String>> {
     std::fs::create_dir_all(download_dir).context("creating download directory")?;
     let tops = state.manifest.entries.iter().zip(&state.paths).filter(|(e, _)| !e.path.contains('/')).map(|(_, rel)| rel);
     let mut journal = state.placed.clone();
     let mut saved = vec![];
     let mut moved: Vec<(&PathBuf, PathBuf, PathBuf)> = vec![];
+    let fail = |name: &str, e: &dyn std::fmt::Display, journal: &mut Placed, moved: &[(&PathBuf, PathBuf, PathBuf)]| -> anyhow::Error {
+        let mut stuck = vec![];
+        for (rel, from, to) in moved.iter().rev() {
+            match move_back(to, from) {
+                Ok(()) => {
+                    journal.remove(*rel);
+                }
+                Err(e) => {
+                    tracing::warn!("could not roll back {}: {e}", to.display());
+                    stuck.push(to.display().to_string());
+                }
+            }
+        }
+        let mut msg = format!("cannot save {name} in {}: {e}", download_dir.display());
+        if !stuck.is_empty() {
+            msg += &format!(" (already saved and left in place: {})", stuck.join(", "));
+        }
+        // Items moved back are in staging again, which by itself voids their
+        // journal entries; updating the journal is tidiness, and a failure is
+        // reported rather than hidden.
+        let synced = fsx::sync_dir(&state.stage).and_then(|_| write_placed(&state.stage, journal));
+        if let Err(e) = synced {
+            msg += &format!(" (journal not updated: {e})");
+        }
+        SaveError(msg).into()
+    };
     for rel in tops {
         if let Some(dst) = state.placed.get(rel) {
             saved.push(dst.clone()); // saved by an earlier attempt, verified intact
@@ -559,43 +609,40 @@ fn place_with(
         let name = rel.to_string_lossy();
         // Write-ahead: the journal names each candidate before the rename.
         let intend = |to: &Path| {
+            step();
             journal.insert(rel.clone(), to.to_path_buf());
-            write_placed(&state.stage, &journal).map_err(|e| std::io::Error::other(format!("journal: {e}")))
+            let r = write_placed(&state.stage, &journal).map_err(|e| std::io::Error::other(format!("journal: {e}")));
+            step();
+            r
         };
         match fsx::move_unique_with(&from, download_dir, &name, intend, &rename) {
             Ok(to) => {
+                step();
                 saved.push(to.clone());
                 moved.push((rel, from, to));
             }
             Err(e) => {
                 journal.remove(rel);
-                let mut stuck = vec![];
-                for (rel, from, to) in moved.iter().rev() {
-                    match move_back(to, from) {
-                        Ok(()) => {
-                            journal.remove(*rel);
-                        }
-                        Err(e) => {
-                            tracing::warn!("could not roll back {}: {e}", to.display());
-                            stuck.push(to.display().to_string());
-                        }
-                    }
-                }
-                // Best effort: entries for items back in staging are ignored anyway.
-                let _ = write_placed(&state.stage, &journal);
-                let mut msg = format!("cannot save {name} in {}: {e}", download_dir.display());
-                if !stuck.is_empty() {
-                    msg += &format!(" (already saved and left in place: {})", stuck.join(", "));
-                }
-                return Err(SaveError(msg).into());
+                return Err(fail(&name, &e, &mut journal, &moved));
             }
         }
     }
-    let _ = std::fs::remove_dir_all(&state.stage);
+    // The renames must be on disk before the sender is told "done".
+    if let Err(e) = fsx::sync_dir(download_dir) {
+        return Err(fail("the received items", &format!("sync: {e}"), &mut journal, &moved));
+    }
+    step();
+    if let Err(e) = fsx::write_durable(&state.stage.join(COMPLETE_MARK), b"") {
+        // Harmless: without the mark the staging area is simply kept longer
+        // (up to a week) and still answers retries of this transfer.
+        tracing::warn!("could not mark {} complete: {e}", state.stage.display());
+    }
+    step();
     Ok(saved.into_iter().map(|p| p.to_string_lossy().into_owned()).collect())
 }
 
-/// Removes staging areas untouched for a week.
+/// Removes staging areas untouched for a week, and completed ones past
+/// `COMPLETE_TTL`.
 pub fn cleanup_stale(download_dir: &Path) {
     let root = download_dir.join(PARTIAL_DIR);
     let Ok(rd) = std::fs::read_dir(&root) else { return };
@@ -607,7 +654,7 @@ pub fn cleanup_stale(download_dir: &Path) {
             .and_then(|t| t.elapsed().ok())
             .map(|d| d > Duration::from_secs(7 * 24 * 3600))
             .unwrap_or(false);
-        if old {
+        if old || completed_long_ago(&e.path()) {
             let _ = std::fs::remove_dir_all(e.path());
         }
     }
@@ -652,7 +699,7 @@ mod tests {
         let got: Vec<Vec<u8>> = saved.iter().map(|p| std::fs::read(p).unwrap()).collect();
         assert_eq!(got, [b"A".to_vec(), b"B".to_vec()], "both arrive, neither overwritten");
         assert_eq!(saved.iter().collect::<HashSet<_>>().len(), 2);
-        assert!(!stage.exists());
+        assert!(only_metadata(&stage), "no item data left in staging");
     }
 
     #[test]
@@ -678,6 +725,103 @@ mod tests {
 
     fn sized(path: &str, size: u64) -> crate::manifest::Entry {
         crate::manifest::Entry { path: path.into(), kind: EntryKind::File { size, mtime_ms: 0, executable: false } }
+    }
+
+    /// Staging holds nothing but its bookkeeping files (journal, log, mark).
+    fn only_metadata(stage: &Path) -> bool {
+        walkdir::WalkDir::new(stage).min_depth(1).into_iter().flatten().all(|e| e.file_name().to_string_lossy().starts_with('.'))
+    }
+
+    // ---- crash injection: the hand-off aborted at every step ----
+
+    fn crash_manifest() -> Manifest {
+        Manifest {
+            entries: vec![
+                sized("a.txt", 3),
+                sized("b.txt", 4),
+                crate::manifest::Entry { path: "emptydir".into(), kind: EntryKind::Dir },
+                crate::manifest::Entry { path: "folder".into(), kind: EntryKind::Dir },
+                sized("folder/inner.txt", 5),
+            ],
+        }
+    }
+    const CRASH_DATA: [(usize, &[u8]); 3] = [(0, b"AAA"), (1, b"BBBB"), (4, b"inner")];
+
+    /// The receiving side as a fresh attempt sees it: `prepare`, then `State`.
+    fn recover(stage: &Path) -> (State, usize) {
+        let m = crash_manifest();
+        let paths = local_paths(&m).unwrap();
+        let (have, placed) = prepare(stage, &m, &paths).unwrap();
+        let mut st = state(stage.to_path_buf(), m.entries);
+        st.placed = placed;
+        (st, have.len())
+    }
+
+    /// Child process of the test below; does nothing unless told to.
+    #[test]
+    fn crash_child() {
+        let (Ok(dir), Ok(k)) = (std::env::var("WARP_CRASH_DIR"), std::env::var("WARP_CRASH_AT")) else { return };
+        let k: usize = k.parse().unwrap();
+        let dir = PathBuf::from(dir);
+        let (st, _) = recover(&dir.join("stage"));
+        let n = std::sync::atomic::AtomicUsize::new(0);
+        let step = || {
+            if n.fetch_add(1, Ordering::SeqCst) == k {
+                std::process::abort(); // like a crash: no unwinding, no cleanup
+            }
+        };
+        place_with(&st, &dir.join("dl"), fsx::rename_noreplace, fsx::rename_noreplace, &step).unwrap();
+        std::process::exit(42); // finished before step k
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_crash_at_any_step_of_the_hand_off_loses_and_duplicates_nothing() {
+        use std::os::unix::process::ExitStatusExt;
+        let exe = std::env::current_exe().unwrap();
+        let mut finished = false;
+        let mut k = 0;
+        while !finished {
+            assert!(k < 200, "hand-off never finished");
+            let d = tempfile::tempdir().unwrap();
+            let (stage, dl) = (d.path().join("stage"), d.path().join("dl"));
+            std::fs::create_dir_all(stage.join("folder")).unwrap();
+            std::fs::create_dir_all(stage.join("emptydir")).unwrap();
+            std::fs::create_dir_all(&dl).unwrap();
+            let paths = local_paths(&crash_manifest()).unwrap();
+            for (i, data) in CRASH_DATA {
+                std::fs::write(stage.join(&paths[i]), data).unwrap();
+                log_chunk(&stage, i as u32, data);
+            }
+            std::fs::write(dl.join("a.txt"), b"theirs").unwrap(); // forces a rename collision
+
+            let status = std::process::Command::new(&exe)
+                .args(["receiver::tests::crash_child", "--exact", "--test-threads=1"])
+                .env("WARP_CRASH_DIR", d.path())
+                .env("WARP_CRASH_AT", k.to_string())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status()
+                .unwrap();
+            finished = status.code() == Some(42);
+            assert!(finished || status.signal() == Some(libc::SIGABRT), "k={k}: child failed: {status:?}");
+
+            // The next attempt of the same transfer.
+            let (st, have) = recover(&stage);
+            assert_eq!(have, CRASH_DATA.len(), "k={k}: every chunk is still accounted for, nothing to re-send");
+            let saved = place(&st, &dl).unwrap_or_else(|e| panic!("k={k}: {e:#}"));
+            let mut names: Vec<String> = std::fs::read_dir(&dl).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
+            names.sort();
+            assert_eq!(names, ["a (2).txt", "a.txt", "b.txt", "emptydir", "folder"], "k={k}: each item exactly once");
+            assert_eq!(std::fs::read(dl.join("a.txt")).unwrap(), b"theirs", "k={k}: existing file untouched");
+            assert_eq!(std::fs::read(dl.join("a (2).txt")).unwrap(), b"AAA");
+            assert_eq!(std::fs::read(dl.join("b.txt")).unwrap(), b"BBBB");
+            assert_eq!(std::fs::read(dl.join("folder/inner.txt")).unwrap(), b"inner");
+            assert_eq!(saved.len(), 4, "k={k}");
+            assert!(only_metadata(&stage), "k={k}");
+            k += 1;
+        }
+        assert!(k > 8, "only {k} steps exercised");
     }
 
     #[test]
@@ -773,7 +917,7 @@ mod tests {
             }
             fsx::rename_noreplace(to, from)
         };
-        let err = format!("{:#}", place_with(&st, &dl, move_in, move_back).unwrap_err());
+        let err = format!("{:#}", place_with(&st, &dl, move_in, move_back, &|| {}).unwrap_err());
         assert!(err.contains("cannot save c.txt") && err.contains("left in place") && err.contains("b.txt"), "{err}");
         // Every file is in exactly one place.
         assert_eq!(std::fs::read(stage.join("a.txt")).unwrap(), b"a.txt", "rolled back");

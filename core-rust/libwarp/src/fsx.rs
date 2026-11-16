@@ -72,9 +72,15 @@ pub fn move_unique_with(
     Err(io::Error::other(format!("no free name for {name}")))
 }
 
+/// Makes renames into or out of `dir` durable (Unix: fsync of the directory;
+/// Windows: renames here are already write-through).
+pub fn sync_dir(dir: &Path) -> io::Result<()> {
+    sys::sync_dir(dir)
+}
+
 /// Writes `bytes` to `path` so that after a crash `path` holds either the old
-/// or the new content, completely: temporary file, fsync, rename, and (Unix)
-/// fsync of the directory.
+/// or the new content, completely: temporary file, fsync, rename, and fsync of
+/// the directory (write-through rename on Windows).
 pub fn write_durable(path: &Path, bytes: &[u8]) -> io::Result<()> {
     use std::io::Write;
     let mut tmp = path.as_os_str().to_owned();
@@ -85,12 +91,11 @@ pub fn write_durable(path: &Path, bytes: &[u8]) -> io::Result<()> {
         f.write_all(bytes)?;
         f.sync_all()?;
     }
-    std::fs::rename(&tmp, path)?;
-    #[cfg(unix)]
-    if let Some(dir) = path.parent() {
-        std::fs::File::open(dir)?.sync_all()?;
+    sys::replace_durable(&tmp, path)?;
+    match path.parent() {
+        Some(dir) => sync_dir(dir),
+        None => Ok(()),
     }
-    Ok(())
 }
 
 /// Bytes available to this user on the filesystem holding `path` (or its
@@ -148,6 +153,19 @@ mod sys {
         matches!(e.raw_os_error(), Some(code) if code == libc::EINVAL || code == libc::ENOSYS || code == libc::ENOTSUP || code == libc::EOPNOTSUPP)
     }
 
+    pub fn replace_durable(from: &Path, to: &Path) -> io::Result<()> {
+        std::fs::rename(from, to)
+    }
+
+    /// Makes renames into/out of `dir` durable. (`sync_all` is F_FULLFSYNC on
+    /// Apple platforms.) Filesystems that cannot sync a directory are skipped.
+    pub fn sync_dir(dir: &Path) -> io::Result<()> {
+        match std::fs::File::open(dir).and_then(|d| d.sync_all()) {
+            Err(e) if unsupported(&e) || e.raw_os_error() == Some(libc::EBADF) => Ok(()),
+            r => r,
+        }
+    }
+
     pub fn available_space(p: &Path) -> Option<u64> {
         let cp = c(p).ok()?;
         // SAFETY: statvfs fills the zeroed struct; the path is NUL-terminated.
@@ -165,21 +183,35 @@ mod sys {
     use std::io;
     use std::os::windows::ffi::OsStrExt;
     use std::path::Path;
-    use windows_sys::Win32::Storage::FileSystem::{GetDiskFreeSpaceExW, MoveFileExW};
+    use windows_sys::Win32::Storage::FileSystem::{GetDiskFreeSpaceExW, MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH};
 
     fn w(p: &Path) -> Vec<u16> {
         p.as_os_str().encode_wide().chain(Some(0)).collect()
     }
 
-    pub fn rename_noreplace(from: &Path, to: &Path) -> io::Result<()> {
+    fn move_file(from: &Path, to: &Path, flags: u32) -> io::Result<()> {
         let (f, t) = (w(from), w(to));
-        // Without MOVEFILE_REPLACE_EXISTING the call fails if `to` exists.
         // SAFETY: both arguments are valid NUL-terminated wide strings.
-        if unsafe { MoveFileExW(f.as_ptr(), t.as_ptr(), 0) } != 0 {
+        if unsafe { MoveFileExW(f.as_ptr(), t.as_ptr(), flags) } != 0 {
             Ok(())
         } else {
             Err(io::Error::last_os_error())
         }
+    }
+
+    /// Without MOVEFILE_REPLACE_EXISTING the call fails if `to` exists;
+    /// WRITE_THROUGH returns only once the move is on disk.
+    pub fn rename_noreplace(from: &Path, to: &Path) -> io::Result<()> {
+        move_file(from, to, MOVEFILE_WRITE_THROUGH)
+    }
+
+    pub fn replace_durable(from: &Path, to: &Path) -> io::Result<()> {
+        move_file(from, to, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)
+    }
+
+    /// Renames above are write-through; NTFS has no directory fsync.
+    pub fn sync_dir(_dir: &Path) -> io::Result<()> {
+        Ok(())
     }
 
     pub fn unsupported(_e: &io::Error) -> bool {

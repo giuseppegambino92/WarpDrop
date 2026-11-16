@@ -95,9 +95,18 @@ Encryption and authentication are identical on both.
   of the folder); if it cannot be written, nothing moves. On the next attempt
   an entry counts only if its item has left staging and is intact at the
   destination, so sending the same items again re-verifies saved items in
-  place and neither re-sends nor duplicates them, even after a crash at any
-  point (an item edited in the meantime is left untouched and a fresh copy
-  lands next to it). On filesystems without
+  place and neither re-sends nor duplicates them (an item edited in the
+  meantime is left untouched and a fresh copy lands next to it). Before the
+  sender is told "done", the download folder is synced (renames are
+  write-through on Windows) and the staging area is marked complete; it then
+  holds only the journal and chunk log for 30 minutes, so a retry of the same
+  finished transfer is answered without a second copy.
+  *Tested*: a child process is killed with `abort()` at every step of the
+  hand-off (before/after each journal write, after each rename, after the
+  sync, after the mark); each time the next attempt finds every chunk
+  accounted for and ends with each item saved exactly once and existing files
+  untouched. Power loss is not simulated: there, durability rests on the
+  filesystem honouring fsync (`F_FULLFSYNC` on Apple platforms). On filesystems without
   an atomic no-replace rename (FAT/exFAT, some network/FUSE mounts) files fall
   back to hard links (still atomic) and folders to check-then-rename.
 
@@ -124,7 +133,7 @@ Encryption and authentication are identical on both.
 
 | Check | Result |
 |---|---|
-| `cargo test --workspace` | **64 passed**: libwarp 34 unit + 11 end-to-end + 2 resume + 3 hand-off + 7 relay abuse, warp-signal 1, desktop 6 |
+| `cargo test --workspace` | **66 passed**: libwarp 36 unit + 11 end-to-end + 2 resume + 3 hand-off + 7 relay abuse, warp-signal 1, desktop 6 |
 | `cargo clippy --workspace --all-targets` | 0 warnings |
 | End-to-end tests | code reaches a late-discovered device among decoys · LAN discovery (mDNS + beacon) · code pairing + nested folder bit-for-bit (BLAKE3) · QR ticket · wrong code rejected + rotation · Link My Device + zero-prompt send + ring gossip · stranger prompt + SAS · clipboard · Internet rendezvous direct **and** forced relay · ADB-style USB tunnel · pause/resume/cancel |
 | Resume tests | LAN: connection dropped after 6/11 chunks → automatic reconnect, ≥ 20 MiB skipped, each byte received once. **Internet**: same drop on a rendezvous-only session (hole-punched *and* forced relay) → reconnects via the resumption ticket, no new code, no prompt |

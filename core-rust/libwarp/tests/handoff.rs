@@ -100,7 +100,18 @@ fn retry_after_a_failed_rollback_does_not_duplicate_or_resend() {
     }
     // Everything was already verified on disk: no file data crossed the wire again.
     assert!(inc.wire_bytes < 64 * 1024, "re-sent {} bytes", inc.wire_bytes);
-    assert!(!dl.join(".warpdrop-partial").read_dir().map(|mut d| d.next().is_some()).unwrap_or(false), "staging cleaned up");
+    // A retry of the same, finished transfer (e.g. our "done" was lost) is
+    // answered from the completed staging area: no third copy.
+    let (out, inc) = send(&s.a, &s.b, &s.items);
+    assert_eq!((out.state, inc.state), (TransferState::Completed, TransferState::Completed));
+    assert_eq!(names(&s.b.downloads()), ["alpha.bin", "beta.bin", "gamma.bin"]);
+    assert!(inc.wire_bytes < 64 * 1024);
+    let leftover: Vec<_> = walkdir::WalkDir::new(dl.join(".warpdrop-partial"))
+        .into_iter()
+        .flatten()
+        .filter(|e| e.file_type().is_file() && !e.file_name().to_string_lossy().starts_with('.'))
+        .collect();
+    assert!(leftover.is_empty(), "no item data left in staging: {leftover:?}");
 }
 
 #[test]

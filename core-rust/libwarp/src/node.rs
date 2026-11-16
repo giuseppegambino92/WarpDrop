@@ -1089,6 +1089,9 @@ async fn serve_transfer(
         Ok(rx) => {
             t.finish_ok(rx.saved_paths);
             inner.incoming_by_stage.lock().remove(&stage_key);
+            // Completed staging areas are kept briefly for idempotent retries.
+            let dl = inner.download_dir();
+            tokio::task::spawn_blocking(move || receiver::cleanup_stale(&dl));
             drop_ticket(inner);
             let _ = tokio::time::timeout(Duration::from_secs(3), conn.closed()).await;
             Ok(())
