@@ -2602,7 +2602,7 @@ dependencies = [
 
 [[package]]
 name = "libwarp"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "anyhow",
  "argon2",
@@ -5766,7 +5766,7 @@ dependencies = [
 
 [[package]]
 name = "uniffi-bindgen"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "uniffi",
 ]
@@ -5999,7 +5999,7 @@ dependencies = [
 
 [[package]]
 name = "warp-cli"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "anyhow",
  "libwarp",
@@ -6007,7 +6007,7 @@ dependencies = [
 
 [[package]]
 name = "warp-signal"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "anyhow",
  "axum",
@@ -6025,7 +6025,7 @@ dependencies = [
 
 [[package]]
 name = "warpdrop-desktop"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "arboard",
  "image",
