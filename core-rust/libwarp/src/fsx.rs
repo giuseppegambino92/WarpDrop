@@ -78,6 +78,14 @@ pub fn sync_dir(dir: &Path) -> io::Result<()> {
     sys::sync_dir(dir)
 }
 
+/// Pushes a written file's data to the storage device. Cheap per file on
+/// Apple platforms (plain `fsync`; the drive cache is flushed once, by the
+/// `sync_dir` that precedes the renames); `fdatasync`/`FlushFileBuffers`
+/// elsewhere. Filesystems that cannot sync a file are skipped.
+pub fn sync_data(f: &std::fs::File) -> io::Result<()> {
+    sys::sync_data(f)
+}
+
 /// Writes `bytes` to `path` so that after a crash `path` holds either the old
 /// or the new content, completely: temporary file, fsync, rename, and fsync of
 /// the directory (write-through rename on Windows).
@@ -157,6 +165,25 @@ mod sys {
         std::fs::rename(from, to)
     }
 
+    pub fn sync_data(f: &std::fs::File) -> io::Result<()> {
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
+        let r = {
+            use std::os::fd::AsRawFd;
+            // SAFETY: a valid open descriptor.
+            if unsafe { libc::fsync(f.as_raw_fd()) } == 0 {
+                Ok(())
+            } else {
+                Err(io::Error::last_os_error())
+            }
+        };
+        #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+        let r = f.sync_data();
+        match r {
+            Err(e) if unsupported(&e) => Ok(()),
+            r => r,
+        }
+    }
+
     /// Makes renames into/out of `dir` durable. (`sync_all` is F_FULLFSYNC on
     /// Apple platforms.) Filesystems that cannot sync a directory are skipped.
     pub fn sync_dir(dir: &Path) -> io::Result<()> {
@@ -210,6 +237,10 @@ mod sys {
     }
 
     /// Renames above are write-through; NTFS has no directory fsync.
+    pub fn sync_data(f: &std::fs::File) -> io::Result<()> {
+        f.sync_data()
+    }
+
     pub fn sync_dir(_dir: &Path) -> io::Result<()> {
         Ok(())
     }

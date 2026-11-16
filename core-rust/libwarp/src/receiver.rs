@@ -255,9 +255,15 @@ fn prepare(stage: &Path, m: &Manifest, paths: &[PathBuf]) -> Result<(Vec<HaveChu
     }
 
     // An already saved item only counts if all of it is still intact where it
-    // was saved; otherwise (edited, partly deleted) it is received again into
-    // staging and saved next to it, never written into.
+    // was saved: every entry still there, of the same kind and size, with
+    // every chunk verified. Otherwise (edited, grown, partly deleted) it is
+    // received again into staging and saved next to it, never written into.
     if !placed.is_empty() {
+        let same_shape = |e: &crate::manifest::Entry, p: &Path| match (std::fs::symlink_metadata(p), &e.kind) {
+            (Ok(md), EntryKind::File { size, .. }) => md.is_file() && md.len() == *size,
+            (Ok(md), EntryKind::Dir) => md.is_dir(),
+            (Err(_), _) => false,
+        };
         let mut verified = vec![false; total_chunks as usize];
         for h in &have {
             verified[(first_chunk[h.entry as usize] + h.chunk as u64) as usize] = true;
@@ -266,7 +272,7 @@ fn prepare(stage: &Path, m: &Manifest, paths: &[PathBuf]) -> Result<(Vec<HaveChu
         for (i, (e, rel)) in m.entries.iter().zip(paths).enumerate() {
             let (top, _) = split_top(rel);
             let range = first_chunk[i] as usize..(first_chunk[i] + e.chunks()) as usize;
-            if placed.contains_key(&top) && !verified[range].iter().all(|v| *v) {
+            if placed.contains_key(&top) && !(verified[range].iter().all(|v| *v) && same_shape(e, &data_path(stage, &placed, rel))) {
                 broken.insert(top);
             }
         }
@@ -524,6 +530,9 @@ fn verify(state: &State, roots: &[[u8; 32]]) -> Result<()> {
         if mtime_ms > 0 {
             let _ = f.set_modified(SystemTime::UNIX_EPOCH + Duration::from_millis(mtime_ms));
         }
+        // The data must be on disk before the file is renamed into place:
+        // otherwise a power cut could leave a saved name with lost content.
+        fsx::sync_data(&f).with_context(|| format!("syncing {}", e.path))?;
         #[cfg(unix)]
         if executable {
             use std::os::unix::fs::PermissionsExt;
@@ -531,6 +540,11 @@ fn verify(state: &State, roots: &[[u8; 32]]) -> Result<()> {
         }
         #[cfg(not(unix))]
         let _ = executable;
+    }
+    // And the chunk log: after a power cut it is what lets the next attempt
+    // count items already saved instead of saving them a second time.
+    if let Ok(log) = std::fs::OpenOptions::new().append(true).open(state.stage.join(".chunks")) {
+        fsx::sync_data(&log).context("syncing the chunk log")?;
     }
     Ok(())
 }
@@ -570,6 +584,9 @@ fn place_with(
     step: &dyn Fn(),
 ) -> Result<Vec<String>> {
     std::fs::create_dir_all(download_dir).context("creating download directory")?;
+    // Staged names and (on Apple, where `sync_data` stops at the drive cache)
+    // the files' data reach stable storage before any rename.
+    fsx::sync_dir(&state.stage).context("syncing the staging area")?;
     let tops = state.manifest.entries.iter().zip(&state.paths).filter(|(e, _)| !e.path.contains('/')).map(|(_, rel)| rel);
     let mut journal = state.placed.clone();
     let mut saved = vec![];
@@ -754,7 +771,20 @@ mod tests {
         let (have, placed) = prepare(stage, &m, &paths).unwrap();
         let mut st = state(stage.to_path_buf(), m.entries);
         st.placed = placed;
+        let mut hashes: Vec<Vec<Option<[u8; 32]>>> = st.manifest.entries.iter().map(|e| vec![None; e.chunks() as usize]).collect();
+        for h in &have {
+            hashes[h.entry as usize][h.chunk as usize] = Some(h.hash);
+        }
+        *st.hashes.lock() = hashes;
         (st, have.len())
+    }
+
+    /// The end of a transfer: `verify` (which makes the received data
+    /// durable), then the hand-off.
+    fn finish(st: &State, dl: &Path, step: &dyn Fn()) -> Result<Vec<String>> {
+        let roots: Vec<[u8; 32]> = st.hashes.lock().iter().map(|hs| file_root(&hs.iter().flatten().copied().collect::<Vec<_>>())).collect();
+        verify(st, &roots)?;
+        place_with(st, dl, fsx::rename_noreplace, fsx::rename_noreplace, step)
     }
 
     /// Child process of the test below; does nothing unless told to.
@@ -770,14 +800,18 @@ mod tests {
                 std::process::abort(); // like a crash: no unwinding, no cleanup
             }
         };
-        place_with(&st, &dir.join("dl"), fsx::rename_noreplace, fsx::rename_noreplace, &step).unwrap();
+        finish(&st, &dir.join("dl"), &step).unwrap();
         std::process::exit(42); // finished before step k
     }
 
+    /// With `WARP_POWER_CUT` set to a shell command that discards all data
+    /// not yet synced (CI runs this on LazyFS), every crash is also a power
+    /// cut.
     #[cfg(unix)]
     #[test]
     fn a_crash_at_any_step_of_the_hand_off_loses_and_duplicates_nothing() {
         use std::os::unix::process::ExitStatusExt;
+        let power_cut = std::env::var("WARP_POWER_CUT").ok().filter(|c| !c.is_empty());
         let exe = std::env::current_exe().unwrap();
         let mut finished = false;
         let mut k = 0;
@@ -805,11 +839,16 @@ mod tests {
                 .unwrap();
             finished = status.code() == Some(42);
             assert!(finished || status.signal() == Some(libc::SIGABRT), "k={k}: child failed: {status:?}");
+            if let Some(cut) = &power_cut {
+                // Everything not yet on stable storage is lost.
+                let ok = std::process::Command::new("sh").args(["-c", cut]).status().unwrap();
+                assert!(ok.success(), "power cut command failed");
+            }
 
             // The next attempt of the same transfer.
             let (st, have) = recover(&stage);
             assert_eq!(have, CRASH_DATA.len(), "k={k}: every chunk is still accounted for, nothing to re-send");
-            let saved = place(&st, &dl).unwrap_or_else(|e| panic!("k={k}: {e:#}"));
+            let saved = finish(&st, &dl, &|| {}).unwrap_or_else(|e| panic!("k={k}: {e:#}"));
             let mut names: Vec<String> = std::fs::read_dir(&dl).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
             names.sort();
             assert_eq!(names, ["a (2).txt", "a.txt", "b.txt", "emptydir", "folder"], "k={k}: each item exactly once");

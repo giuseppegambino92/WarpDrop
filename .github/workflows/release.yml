@@ -25,7 +25,7 @@ on:
         description: "Build only one platform (to test CI changes cheaply)"
         type: choice
         default: all
-        options: [all, desktop, macos, android, relay]
+        options: [all, desktop, macos, android, relay, filesystems]
 
 permissions:
   contents: read
@@ -52,6 +52,22 @@ jobs:
         run: cargo clippy --locked -p libwarp -p warp-signal -p warp-cli --all-targets -- -D warnings
       - name: Tests
         run: cargo test --locked -p libwarp -p warp-signal
+
+  filesystems:
+    name: Filesystems & power cuts (Linux)
+    runs-on: ubuntu-24.04
+    if: github.event_name != 'workflow_dispatch' || inputs.only == 'all' || inputs.only == 'filesystems'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install filesystem tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq xfsprogs btrfs-progs dosfstools exfatprogs ntfs-3g nfs-kernel-server \
+            fuse3 libfuse3-dev cmake g++
+      - name: Save path on ext4, XFS, Btrfs, FAT32, exFAT, NTFS (FUSE), NFS, tmpfs; power cuts on LazyFS
+        run: scripts/test-filesystems.sh
 
   desktop:
     name: Desktop (${{ matrix.name }})
@@ -332,7 +348,7 @@ jobs:
   release:
     name: Publish GitHub Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [desktop, macos, android, relay]
+    needs: [filesystems, desktop, macos, android, relay]
     runs-on: ubuntu-24.04
     permissions:
       contents: write

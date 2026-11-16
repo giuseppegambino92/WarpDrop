@@ -9,6 +9,7 @@ mod common;
 
 use common::*;
 use parking_lot::Mutex;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 use warp::*;
@@ -151,4 +152,52 @@ fn transfers_over_the_memory_budget_are_declined_up_front() {
     assert_eq!(out.state, TransferState::Failed);
     assert!(out.error.unwrap_or_default().contains("too_large"));
     assert!(names(&b.downloads()).is_empty());
+}
+
+#[test]
+fn items_changed_after_a_completed_transfer_are_received_again_next_to_them() {
+    let _g = HOOK.lock();
+    let mut s = setup();
+    let album = s._src.path().join("album");
+    std::fs::create_dir_all(album.join("sub")).unwrap();
+    std::fs::write(album.join("a.txt"), b"photo").unwrap();
+    std::fs::write(album.join("empty.txt"), b"").unwrap();
+    s.items.push(album);
+    let (out, inc) = send(&s.a, &s.b, &s.items);
+    assert_eq!((out.state, inc.state), (TransferState::Completed, TransferState::Completed), "{:?}", inc.error);
+    let dl = s.b.downloads();
+
+    // Within minutes, the user changes what was received, then the sender
+    // sends the same items again.
+    let edited = dl.join("alpha.bin");
+    let mut bytes = std::fs::read(&edited).unwrap();
+    bytes[0] ^= 1; // same size, different content
+    std::fs::write(&edited, &bytes).unwrap();
+    let grown = dl.join("beta.bin");
+    std::fs::OpenOptions::new().append(true).open(&grown).unwrap().write_all(b"notes").unwrap();
+    let elsewhere = tempfile::tempdir().unwrap();
+    std::fs::rename(dl.join("gamma.bin"), elsewhere.path().join("gamma.bin")).unwrap();
+    std::fs::remove_file(dl.join("album/empty.txt")).unwrap();
+    let mine = |p: &Path| (std::fs::metadata(p).unwrap().len(), digest(p));
+    let before = [mine(&edited), mine(&grown), mine(&elsewhere.path().join("gamma.bin")), mine(&dl.join("album/a.txt"))];
+
+    let (out, inc) = send(&s.a, &s.b, &s.items);
+    assert_eq!((out.state, inc.state), (TransferState::Completed, TransferState::Completed), "{:?}", inc.error);
+    // Nothing the user changed is written into; each changed item arrives as
+    // a fresh, complete copy (at its old name if that is free again).
+    assert_eq!(names(&dl), ["album", "album (2)", "alpha (2).bin", "alpha.bin", "beta (2).bin", "beta.bin", "gamma.bin"]);
+    let after = [mine(&edited), mine(&grown), mine(&elsewhere.path().join("gamma.bin")), mine(&dl.join("album/a.txt"))];
+    assert_eq!(before, after, "the user's files are untouched");
+    assert!(!dl.join("album/empty.txt").exists());
+    for (copy, orig) in [("alpha (2).bin", &s.items[0]), ("beta (2).bin", &s.items[1]), ("gamma.bin", &s.items[2])] {
+        assert_eq!(digest(&dl.join(copy)), digest(orig), "{copy}");
+    }
+    for f in ["a.txt", "empty.txt"] {
+        assert_eq!(std::fs::read(dl.join("album (2)").join(f)).unwrap(), std::fs::read(s.items[3].join(f)).unwrap());
+    }
+    assert!(dl.join("album (2)/sub").is_dir());
+    assert_eq!(
+        inc.saved_paths,
+        ["alpha (2).bin", "beta (2).bin", "gamma.bin", "album (2)"].map(|n| dl.join(n).to_string_lossy().into_owned())
+    );
 }
