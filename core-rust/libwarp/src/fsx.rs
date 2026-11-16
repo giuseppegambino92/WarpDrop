@@ -44,19 +44,53 @@ fn fallback(from: &Path, to: &Path) -> io::Result<()> {
 /// Moves `from` into `dir` as `name`, or `name (2)`, `name (3)`, … if taken.
 /// Returns the final path.
 pub fn move_unique(from: &Path, dir: &Path, name: &str) -> io::Result<PathBuf> {
+    move_unique_with(from, dir, name, |_| Ok(()), rename_noreplace)
+}
+
+/// `move_unique`, calling `before(candidate)` ahead of every rename attempt
+/// (a failure there aborts before anything moves) and moving with `rename`.
+pub fn move_unique_with(
+    from: &Path,
+    dir: &Path,
+    name: &str,
+    mut before: impl FnMut(&Path) -> io::Result<()>,
+    rename: impl Fn(&Path, &Path) -> io::Result<()>,
+) -> io::Result<PathBuf> {
     let (stem, ext) = match name.rfind('.') {
         Some(i) if i > 0 => (&name[..i], &name[i..]),
         _ => (name, ""),
     };
     for n in 1..10_000u32 {
         let to = if n == 1 { dir.join(name) } else { dir.join(format!("{stem} ({n}){ext}")) };
-        match rename_noreplace(from, &to) {
+        before(&to)?;
+        match rename(from, &to) {
             Ok(()) => return Ok(to),
             Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
             Err(e) => return Err(e),
         }
     }
     Err(io::Error::other(format!("no free name for {name}")))
+}
+
+/// Writes `bytes` to `path` so that after a crash `path` holds either the old
+/// or the new content, completely: temporary file, fsync, rename, and (Unix)
+/// fsync of the directory.
+pub fn write_durable(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    use std::io::Write;
+    let mut tmp = path.as_os_str().to_owned();
+    tmp.push(".tmp");
+    let tmp = PathBuf::from(tmp);
+    {
+        let mut f = std::fs::File::create(&tmp)?;
+        f.write_all(bytes)?;
+        f.sync_all()?;
+    }
+    std::fs::rename(&tmp, path)?;
+    #[cfg(unix)]
+    if let Some(dir) = path.parent() {
+        std::fs::File::open(dir)?.sync_all()?;
+    }
+    Ok(())
 }
 
 /// Bytes available to this user on the filesystem holding `path` (or its
@@ -199,6 +233,20 @@ mod tests {
         assert_eq!(fallback(&p("d1"), &p("d2")).unwrap_err().kind(), io::ErrorKind::AlreadyExists);
         fallback(&p("d1"), &p("d3")).unwrap();
         assert!(p("d3/x").exists() && !p("d1").exists());
+    }
+
+    #[test]
+    fn durable_writes_replace_whole_files() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("j");
+        write_durable(&p, b"one").unwrap();
+        write_durable(&p, b"two").unwrap();
+        assert_eq!(std::fs::read(&p).unwrap(), b"two");
+        assert!(!d.path().join("j.tmp").exists());
+        // A failure is reported, and the old content survives.
+        std::fs::create_dir(d.path().join("j.tmp")).unwrap();
+        assert!(write_durable(&p, b"three").is_err());
+        assert_eq!(std::fs::read(&p).unwrap(), b"two");
     }
 
     #[test]

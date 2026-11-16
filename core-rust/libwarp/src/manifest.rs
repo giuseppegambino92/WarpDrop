@@ -263,20 +263,17 @@ pub fn safe_join(root: &Path, rel: &str) -> Result<PathBuf> {
     Ok(out)
 }
 
-/// Upper bounds for an incoming manifest, checked before anything is allocated
-/// per entry or per chunk. Together with the 64 MiB cap on control messages
-/// they are the receiver's memory budget for one transfer:
-/// * per-chunk state is 33 bytes (`Option<[u8; 32]>`), so `MAX_TOTAL_CHUNKS`
-///   keeps it under 70 MiB;
-/// * per-entry state (manifest, local path, lookup tables) stays in the low
-///   hundreds of MiB even for `MAX_ENTRIES` entries with long names.
-///
-/// The receiver also refuses, before accepting, anything that does not fit in
-/// its free disk space.
+/// Hard upper bounds for an incoming manifest on any device, checked before
+/// anything is allocated per entry or per chunk (`limits` scales them down
+/// to the device's RAM, and the free disk space is checked too).
+/// * `MAX_TOTAL_CHUNKS`: the list of already-held chunks travels in one
+///   control message (≤ 42 bytes each, 64 MiB cap), and peak per-chunk state
+///   is ~80 bytes, so ≤ 2²⁰ chunks keeps both within bounds.
+/// * `MAX_ENTRIES`: per-entry state (manifest, local path, lookup tables).
 pub const MAX_ENTRIES: usize = 1_000_000;
 const MAX_PATH_BYTES: usize = 4096;
-/// 2²¹ chunks of 4 MiB = 8 TiB per transfer.
-pub const MAX_TOTAL_CHUNKS: u64 = 1 << 21;
+/// 2²⁰ chunks of 4 MiB = 4 TiB per transfer.
+pub const MAX_TOTAL_CHUNKS: u64 = 1 << 20;
 pub const MAX_TOTAL_BYTES: u64 = MAX_TOTAL_CHUNKS * crate::hashing::CHUNK_SIZE;
 
 pub fn validate(m: &Manifest) -> Result<()> {

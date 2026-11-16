@@ -60,11 +60,16 @@ pub static DEBUG_PLACE_FAULT: std::sync::atomic::AtomicBool = std::sync::atomic:
 
 const LOG_RECORD: usize = 4 + 4 + 32;
 
-/// Journal of top-level items already moved into the download directory
-/// (`{"<top>": "<final path>"}`), kept in the staging area until the transfer
-/// completes. If a hand-off stops halfway (a move and its rollback failed, or
-/// the app died), the next attempt for the same transfer re-verifies those
-/// items where they now are and does not save them a second time.
+/// Write-ahead journal of the hand-off (`{"<top>": "<destination>"}`), kept in
+/// the staging area until the transfer completes.
+///
+/// Before each rename attempt the exact destination is written and synced to
+/// disk; a failure there aborts the hand-off before anything moves. So for
+/// every item that ever left staging the journal already names where it went.
+/// On the next attempt an entry counts only if its item is no longer in
+/// staging (otherwise the rename never happened, e.g. a crash right after the
+/// journal write) and is still intact at the destination; such items are
+/// neither re-sent nor saved a second time.
 const PLACED_LOG: &str = ".placed";
 
 /// Top-level item (relative path, one component) → where it was saved.
@@ -78,13 +83,29 @@ fn read_placed(stage: &Path) -> Placed {
         .unwrap_or_default()
 }
 
-fn write_placed(stage: &Path, placed: &Placed) {
+fn write_placed(stage: &Path, placed: &Placed) -> std::io::Result<()> {
     let m: BTreeMap<String, String> =
         placed.iter().map(|(k, v)| (k.to_string_lossy().into_owned(), v.to_string_lossy().into_owned())).collect();
-    let (tmp, dst) = (stage.join(".placed.tmp"), stage.join(PLACED_LOG));
-    let r = std::fs::write(&tmp, serde_json::to_vec(&m).unwrap_or_default()).and_then(|_| std::fs::rename(&tmp, &dst));
-    if let Err(e) = r {
-        tracing::warn!("could not update {}: {e}", dst.display());
+    fsx::write_durable(&stage.join(PLACED_LOG), &serde_json::to_vec(&m).map_err(std::io::Error::other)?)
+}
+
+fn log_record(entry: u32, chunk: u32, hash: &[u8; 32]) -> [u8; LOG_RECORD] {
+    let mut rec = [0u8; LOG_RECORD];
+    rec[0..4].copy_from_slice(&entry.to_be_bytes());
+    rec[4..8].copy_from_slice(&chunk.to_be_bytes());
+    rec[8..].copy_from_slice(hash);
+    rec
+}
+
+/// Rewrites the chunk log with only the records that verified. Best effort:
+/// the log is a hint, re-checked against the disk on every resume.
+fn compact_log(log: &Path, have: &[HaveChunk]) {
+    let mut bytes = Vec::with_capacity(have.len() * LOG_RECORD);
+    for h in have {
+        bytes.extend_from_slice(&log_record(h.entry, h.chunk, &h.hash));
+    }
+    if let Err(e) = fsx::write_durable(log, &bytes) {
+        tracing::warn!("could not compact {}: {e}", log.display());
     }
 }
 
@@ -156,19 +177,41 @@ fn prepare(stage: &Path, m: &Manifest, paths: &[PathBuf]) -> Result<(Vec<HaveChu
     std::fs::create_dir_all(stage)?;
     let mut placed = read_placed(stage);
     let journaled = placed.len();
-    placed.retain(|_, dst| std::fs::symlink_metadata(dst).is_ok());
+    // Still in staging → never moved; gone from the destination → nothing to count.
+    let exists = |p: &Path| std::fs::symlink_metadata(p).is_ok();
+    placed.retain(|top, dst| !exists(&stage.join(top)) && exists(dst));
 
+    // The chunk log is streamed, never loaded whole: memory stays one bit per
+    // chunk plus the result. Every chunk is logged once (rarely twice, when a
+    // duplicate races), so anything past twice the chunk count is junk and is
+    // not read. The log is then rewritten with just the verified records.
     let mut have = vec![];
     let log = stage.join(".chunks");
-    if let Ok(bytes) = std::fs::read(&log) {
-        let mut seen = HashSet::new();
-        for rec in bytes.as_chunks::<LOG_RECORD>().0 {
+    let mut first_chunk = Vec::with_capacity(m.entries.len());
+    let mut total_chunks: u64 = 0;
+    for e in &m.entries {
+        first_chunk.push(total_chunks);
+        total_chunks += e.chunks();
+    }
+    let mut seen = vec![false; total_chunks as usize];
+    let mut records_read: u64 = 0;
+    if let Ok(f) = std::fs::File::open(&log) {
+        use std::io::Read;
+        let mut r = std::io::BufReader::with_capacity(256 * 1024, f);
+        let mut rec = [0u8; LOG_RECORD];
+        let limit = total_chunks.saturating_mul(2) + 64;
+        while records_read < limit && r.read_exact(&mut rec).is_ok() {
+            records_read += 1;
             let entry = u32::from_be_bytes(rec[0..4].try_into()?);
             let chunk = u32::from_be_bytes(rec[4..8].try_into()?);
             let Some(e) = m.entries.get(entry as usize) else { continue };
             let EntryKind::File { size, .. } = e.kind else { continue };
             let n = chunk_count(size);
-            if chunk as u64 >= n || !seen.insert((entry, chunk)) {
+            if chunk as u64 >= n {
+                continue;
+            }
+            let idx = (first_chunk[entry as usize] + chunk as u64) as usize;
+            if std::mem::replace(&mut seen[idx], true) {
                 continue;
             }
             // Trust the disk, not the log.
@@ -185,16 +228,24 @@ fn prepare(stage: &Path, m: &Manifest, paths: &[PathBuf]) -> Result<(Vec<HaveChu
             }
         }
     }
+    drop(seen);
+    if records_read > have.len() as u64 {
+        compact_log(&log, &have);
+    }
 
     // An already saved item only counts if all of it is still intact where it
     // was saved; otherwise (edited, partly deleted) it is received again into
     // staging and saved next to it, never written into.
     if !placed.is_empty() {
-        let verified: HashSet<(u32, u32)> = have.iter().map(|h| (h.entry, h.chunk)).collect();
+        let mut verified = vec![false; total_chunks as usize];
+        for h in &have {
+            verified[(first_chunk[h.entry as usize] + h.chunk as u64) as usize] = true;
+        }
         let mut broken = HashSet::new();
         for (i, (e, rel)) in m.entries.iter().zip(paths).enumerate() {
             let (top, _) = split_top(rel);
-            if placed.contains_key(&top) && (0..e.chunks() as u32).any(|c| !verified.contains(&(i as u32, c))) {
+            let range = first_chunk[i] as usize..(first_chunk[i] + e.chunks()) as usize;
+            if placed.contains_key(&top) && !verified[range].iter().all(|v| *v) {
                 broken.insert(top);
             }
         }
@@ -204,7 +255,10 @@ fn prepare(stage: &Path, m: &Manifest, paths: &[PathBuf]) -> Result<(Vec<HaveChu
         }
     }
     if placed.len() != journaled {
-        write_placed(stage, &placed);
+        // Best effort: a stale entry is harmless (see the rule above).
+        if let Err(e) = write_placed(stage, &placed) {
+            tracing::warn!("could not prune the hand-off journal: {e}");
+        }
     }
 
     for (e, rel) in m.entries.iter().zip(paths) {
@@ -402,10 +456,7 @@ async fn handle_stream(mut s: quinn::RecvStream, state: &Arc<State>, t: &Arc<Tra
             }
             let f = std::fs::OpenOptions::new().write(true).create(true).truncate(false).open(&path)?;
             write_at(&f, &data, h.chunk as u64 * CHUNK_SIZE)?;
-            let mut rec = Vec::with_capacity(LOG_RECORD);
-            rec.extend_from_slice(&h.entry.to_be_bytes());
-            rec.extend_from_slice(&h.chunk.to_be_bytes());
-            rec.extend_from_slice(&hash);
+            let rec = log_record(h.entry, h.chunk, &hash);
             std::fs::OpenOptions::new()
                 .append(true)
                 .create(true)
@@ -475,22 +526,23 @@ fn verify(state: &State, roots: &[[u8; 32]]) -> Result<()> {
 /// done instead of saving them again. The rest stays staged.
 fn place(state: &State, download_dir: &Path) -> Result<Vec<String>> {
     if DEBUG_PLACE_FAULT.swap(false, Ordering::AcqRel) {
-        let calls = std::sync::atomic::AtomicUsize::new(0);
-        let move_in = |from: &Path, dir: &Path, name: &str| {
-            if calls.fetch_add(1, Ordering::AcqRel) == 1 {
+        let first = Mutex::new(None::<PathBuf>);
+        let rename = |from: &Path, to: &Path| {
+            let mut first = first.lock();
+            if first.get_or_insert_with(|| from.to_path_buf()) != from {
                 return Err(std::io::Error::other("injected fault"));
             }
-            fsx::move_unique(from, dir, name)
+            fsx::rename_noreplace(from, to)
         };
-        return place_with(state, download_dir, move_in, |_, _| Err(std::io::Error::other("injected fault")));
+        return place_with(state, download_dir, rename, |_, _| Err(std::io::Error::other("injected fault")));
     }
-    place_with(state, download_dir, fsx::move_unique, fsx::rename_noreplace)
+    place_with(state, download_dir, fsx::rename_noreplace, fsx::rename_noreplace)
 }
 
 fn place_with(
     state: &State,
     download_dir: &Path,
-    move_in: impl Fn(&Path, &Path, &str) -> std::io::Result<PathBuf>,
+    rename: impl Fn(&Path, &Path) -> std::io::Result<()>,
     move_back: impl Fn(&Path, &Path) -> std::io::Result<()>,
 ) -> Result<Vec<String>> {
     std::fs::create_dir_all(download_dir).context("creating download directory")?;
@@ -505,14 +557,18 @@ fn place_with(
         }
         let from = state.stage.join(rel);
         let name = rel.to_string_lossy();
-        match move_in(&from, download_dir, &name) {
+        // Write-ahead: the journal names each candidate before the rename.
+        let intend = |to: &Path| {
+            journal.insert(rel.clone(), to.to_path_buf());
+            write_placed(&state.stage, &journal).map_err(|e| std::io::Error::other(format!("journal: {e}")))
+        };
+        match fsx::move_unique_with(&from, download_dir, &name, intend, &rename) {
             Ok(to) => {
-                journal.insert(rel.clone(), to.clone());
-                write_placed(&state.stage, &journal);
                 saved.push(to.clone());
                 moved.push((rel, from, to));
             }
             Err(e) => {
+                journal.remove(rel);
                 let mut stuck = vec![];
                 for (rel, from, to) in moved.iter().rev() {
                     match move_back(to, from) {
@@ -525,7 +581,8 @@ fn place_with(
                         }
                     }
                 }
-                write_placed(&state.stage, &journal);
+                // Best effort: entries for items back in staging are ignored anyway.
+                let _ = write_placed(&state.stage, &journal);
                 let mut msg = format!("cannot save {name} in {}: {e}", download_dir.display());
                 if !stuck.is_empty() {
                     msg += &format!(" (already saved and left in place: {})", stuck.join(", "));
@@ -612,6 +669,88 @@ mod tests {
         assert_eq!(std::fs::read(stage.join("first.txt")).unwrap(), b"1", "and kept in staging");
     }
 
+    /// Writes `data` as a staged-and-logged single-chunk file of entry `i`.
+    fn log_chunk(stage: &Path, i: u32, data: &[u8]) {
+        let rec = log_record(i, 0, &chunk_hash(data, 0, 1));
+        let mut f = std::fs::OpenOptions::new().append(true).create(true).open(stage.join(".chunks")).unwrap();
+        f.write_all(&rec).unwrap();
+    }
+
+    fn sized(path: &str, size: u64) -> crate::manifest::Entry {
+        crate::manifest::Entry { path: path.into(), kind: EntryKind::File { size, mtime_ms: 0, executable: false } }
+    }
+
+    #[test]
+    fn a_journal_failure_stops_before_anything_moves() {
+        let d = tempfile::tempdir().unwrap();
+        let (stage, dl) = (d.path().join("stage"), d.path().join("dl"));
+        std::fs::create_dir_all(&stage).unwrap();
+        let st = state(stage.clone(), vec![file("a.txt")]);
+        std::fs::write(stage.join("a.txt"), b"a").unwrap();
+        // The journal cannot be written (its temp path is taken by a folder).
+        std::fs::create_dir(stage.join(".placed.tmp")).unwrap();
+        let err = format!("{:#}", place(&st, &dl).unwrap_err());
+        assert!(err.contains("journal"), "{err}");
+        assert!(!dl.join("a.txt").exists(), "nothing moved without a journal entry");
+        assert!(stage.join("a.txt").exists());
+    }
+
+    #[test]
+    fn journal_entries_are_reconciled_on_restart() {
+        let d = tempfile::tempdir().unwrap();
+        let (stage, dl) = (d.path().join("stage"), d.path().join("dl"));
+        std::fs::create_dir_all(&stage).unwrap();
+        std::fs::create_dir_all(&dl).unwrap();
+        let m = Manifest { entries: vec![sized("moved.txt", 5), sized("intent.txt", 6), sized("edited.txt", 6)] };
+        let paths = local_paths(&m).unwrap();
+        // "moved": crashed after its rename → only in Downloads, intact.
+        std::fs::write(dl.join("moved.txt"), b"moved").unwrap();
+        log_chunk(&stage, 0, b"moved");
+        // "intent": crashed after the journal write, before the rename → still
+        // staged; the destination name is someone else's file.
+        std::fs::write(stage.join("intent.txt"), b"intent").unwrap();
+        std::fs::write(dl.join("intent.txt"), b"theirs").unwrap();
+        log_chunk(&stage, 1, b"intent");
+        // "edited": moved, then changed by the user.
+        std::fs::write(dl.join("edited.txt"), b"EDITED").unwrap();
+        log_chunk(&stage, 2, b"edited");
+        let journal: Placed = ["moved.txt", "intent.txt", "edited.txt"].iter().map(|n| (PathBuf::from(n), dl.join(n))).collect();
+        write_placed(&stage, &journal).unwrap();
+
+        let (have, placed) = prepare(&stage, &m, &paths).unwrap();
+        assert_eq!(placed.keys().collect::<Vec<_>>(), [&PathBuf::from("moved.txt")]);
+        let mut got: Vec<u32> = have.iter().map(|h| h.entry).collect();
+        got.sort();
+        assert_eq!(got, [0, 1], "moved verified in place, intent in staging, edited must be re-sent");
+        assert_eq!(read_placed(&stage), placed, "journal pruned");
+    }
+
+    #[test]
+    fn the_chunk_log_is_streamed_bounded_and_compacted() {
+        let d = tempfile::tempdir().unwrap();
+        let stage = d.path().join("stage");
+        std::fs::create_dir_all(&stage).unwrap();
+        let m = Manifest { entries: vec![sized("a.bin", 3)] };
+        let paths = local_paths(&m).unwrap();
+        std::fs::write(stage.join("a.bin"), b"abc").unwrap();
+        // One good record, then a flood of junk (wrong hashes, bad indices).
+        log_chunk(&stage, 0, b"abc");
+        let mut f = std::fs::OpenOptions::new().append(true).open(stage.join(".chunks")).unwrap();
+        for i in 0..10_000u32 {
+            f.write_all(&log_record(i % 3, i, &[7; 32])).unwrap();
+        }
+        drop(f);
+        let (have, _) = prepare(&stage, &m, &paths).unwrap();
+        assert_eq!(have.len(), 1);
+        assert_eq!(std::fs::metadata(stage.join(".chunks")).unwrap().len(), LOG_RECORD as u64, "compacted to the verified record");
+        // Junk before the good record beyond the read limit is not even read.
+        let junk: Vec<u8> = (0..100u32).flat_map(|i| log_record(5, i, &[0; 32])).collect();
+        std::fs::write(stage.join(".chunks"), junk).unwrap();
+        log_chunk(&stage, 0, b"abc");
+        let (have, _) = prepare(&stage, &m, &paths).unwrap();
+        assert!(have.is_empty(), "limit is 2 × chunks + 64 records");
+    }
+
     #[test]
     fn a_failed_rollback_is_reported_and_loses_nothing() {
         let d = tempfile::tempdir().unwrap();
@@ -622,11 +761,11 @@ mod tests {
             std::fs::write(stage.join(n), n).unwrap();
         }
         // "c.txt" fails to move in; rolling back "b.txt" fails too.
-        let move_in = |from: &Path, dir: &Path, name: &str| {
-            if name == "c.txt" {
+        let move_in = |from: &Path, to: &Path| {
+            if from.ends_with("c.txt") {
                 return Err(std::io::Error::other("disk error"));
             }
-            fsx::move_unique(from, dir, name)
+            fsx::rename_noreplace(from, to)
         };
         let move_back = |to: &Path, from: &Path| {
             if to.ends_with("b.txt") {

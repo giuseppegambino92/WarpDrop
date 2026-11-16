@@ -14,8 +14,10 @@ use crate::hashing::CHUNK_SIZE;
 use crate::manifest::{Manifest, MAX_ENTRIES, MAX_TOTAL_CHUNKS};
 
 const MIB: u64 = 1024 * 1024;
-/// `Option<[u8; 32]>` per chunk.
-const BYTES_PER_CHUNK: u64 = 33;
+/// Peak per chunk while a transfer is set up: the verified-hash table
+/// (`Option<[u8; 32]>`, 33 B), the already-held list sent back to the sender
+/// (40 B) and the log-dedup bitmap (1 B), rounded up.
+const BYTES_PER_CHUNK: u64 = 80;
 /// Conservative estimate of the peak per entry while a transfer is set up
 /// (decoded manifest, its copy for staging, local path, collision tables).
 const BYTES_PER_ENTRY: u64 = 1024;
@@ -105,10 +107,10 @@ mod tests {
 
     #[test]
     fn budget_scales_with_the_device() {
-        // A 3 GB phone: 96 MiB → ~760 k chunks (≈ 2.9 TiB) and 73 k entries.
+        // A 3 GB phone: 96 MiB → ~315 k chunks (≈ 1.2 TiB) and 73 k entries.
         let phone = Limits::for_budget(3 * 1024 * MIB / 32);
         assert_eq!(phone.max_entries, 73_728);
-        assert_eq!(phone.max_chunks, 762_600);
+        assert_eq!(phone.max_chunks, 314_572);
         // Big machines hit the hard caps.
         let big = Limits::for_budget(1024 * MIB);
         assert_eq!((big.max_entries, big.max_chunks), (786_432, MAX_TOTAL_CHUNKS));
