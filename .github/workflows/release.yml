@@ -56,6 +56,7 @@ jobs:
   filesystems:
     name: Filesystems & power cuts (Linux)
     runs-on: ubuntu-24.04
+    timeout-minutes: 45 # usually about 10
     if: github.event_name != 'workflow_dispatch' || inputs.only == 'all' || inputs.only == 'filesystems'
     steps:
       - uses: actions/checkout@v5

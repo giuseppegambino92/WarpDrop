@@ -44,6 +44,11 @@ lazyfs() {
   grep -q '^user_allow_other' /etc/fuse.conf || echo user_allow_other | sudo tee -a /etc/fuse.conf >/dev/null
   rm -f "$WORK/faults.fifo" "$WORK/done.fifo"
   mkfifo "$WORK/faults.fifo" "$WORK/done.fifo"
+  # LazyFS opens done.fifo for writing once, at start-up, and reports each
+  # finished command with one write. Without a reader open at that instant the
+  # report is lost (EPIPE) and the wait below never ends. This reader, held
+  # open for the whole run, keeps every report buffered in the pipe.
+  exec 9<>"$WORK/done.fifo"
   cat >"$WORK/lazyfs.toml" <<EOF
 [faults]
 fifo_path="$WORK/faults.fifo"
@@ -63,7 +68,7 @@ EOF
   for _ in $(seq 50); do findmnt "$m" >/dev/null && break; sleep 0.2; done
   findmnt "$m" >/dev/null || { cat "$WORK/lazyfs.log"; exit 1; }
 
-  local cut="echo lazyfs::clear-cache > '$WORK/faults.fifo' && read -r _ < '$WORK/done.fifo'"
+  local cut="echo lazyfs::clear-cache > '$WORK/faults.fifo' && timeout 60 head -n1 '$WORK/done.fifo' >/dev/null"
   # Sanity: the power cut really discards unsynced data, and keeps synced data.
   local probe="$m/probe"
   echo lost >"$probe.lost"
