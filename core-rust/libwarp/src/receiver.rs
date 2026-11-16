@@ -13,7 +13,6 @@
 
 use crate::compress::{decompress, ENC_RAW, ENC_ZSTD};
 use crate::hashing::{chunk_count, chunk_hash, chunk_len, file_root, CHUNK_SIZE};
-use crate::error::WarpError;
 use crate::fsx;
 use crate::manifest::{local_paths, validate, EntryKind, Manifest};
 use crate::protocol::{close, read_msg, write_msg, FrameHeader, HaveChunk, Msg, FRAME_HEADER_LEN};
@@ -22,7 +21,7 @@ use crate::transfer::Transfer;
 use crate::types::TransferState;
 use anyhow::{anyhow, bail, Context, Result};
 use parking_lot::Mutex;
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -31,6 +30,13 @@ use std::time::{Duration, SystemTime};
 use tokio::sync::Notify;
 
 pub const PARTIAL_DIR: &str = ".warpdrop-partial";
+
+/// The verified data could not be moved into the download folder. Final for
+/// this attempt (both sides report it; nothing to reconnect for), but the
+/// data stays staged, so sending the same items again completes it.
+#[derive(Debug, thiserror::Error)]
+#[error("{0}")]
+pub struct SaveError(pub String);
 
 /// Test hook ("pull the cable"): the receiver drops the connection once this
 /// many more chunks have been verified and written. 0 = disabled. Fires once
@@ -48,7 +54,57 @@ fn debug_drop_tick() -> bool {
     }
     false
 }
+/// Test hook: the next hand-off fails to move its second top-level item and
+/// also fails to roll back the first (a disk error at the worst moment).
+pub static DEBUG_PLACE_FAULT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 const LOG_RECORD: usize = 4 + 4 + 32;
+
+/// Journal of top-level items already moved into the download directory
+/// (`{"<top>": "<final path>"}`), kept in the staging area until the transfer
+/// completes. If a hand-off stops halfway (a move and its rollback failed, or
+/// the app died), the next attempt for the same transfer re-verifies those
+/// items where they now are and does not save them a second time.
+const PLACED_LOG: &str = ".placed";
+
+/// Top-level item (relative path, one component) → where it was saved.
+type Placed = HashMap<PathBuf, PathBuf>;
+
+fn read_placed(stage: &Path) -> Placed {
+    std::fs::read(stage.join(PLACED_LOG))
+        .ok()
+        .and_then(|b| serde_json::from_slice::<BTreeMap<String, String>>(&b).ok())
+        .map(|m| m.into_iter().map(|(k, v)| (PathBuf::from(k), PathBuf::from(v))).collect())
+        .unwrap_or_default()
+}
+
+fn write_placed(stage: &Path, placed: &Placed) {
+    let m: BTreeMap<String, String> =
+        placed.iter().map(|(k, v)| (k.to_string_lossy().into_owned(), v.to_string_lossy().into_owned())).collect();
+    let (tmp, dst) = (stage.join(".placed.tmp"), stage.join(PLACED_LOG));
+    let r = std::fs::write(&tmp, serde_json::to_vec(&m).unwrap_or_default()).and_then(|_| std::fs::rename(&tmp, &dst));
+    if let Err(e) = r {
+        tracing::warn!("could not update {}: {e}", dst.display());
+    }
+}
+
+/// Splits a local relative path into its top-level item and the rest.
+fn split_top(rel: &Path) -> (PathBuf, PathBuf) {
+    let mut c = rel.components();
+    let top = c.next().map(|t| PathBuf::from(t.as_os_str())).unwrap_or_default();
+    (top, c.as_path().to_path_buf())
+}
+
+/// Where the data of an entry with local path `rel` currently is: in staging,
+/// or inside an item that was already saved.
+fn data_path(stage: &Path, placed: &Placed, rel: &Path) -> PathBuf {
+    let (top, rest) = split_top(rel);
+    match placed.get(&top) {
+        Some(dst) if rest.as_os_str().is_empty() => dst.clone(),
+        Some(dst) => dst.join(rest),
+        None => stage.join(rel),
+    }
+}
 
 pub fn staging_key(peer_key: &[u8; 32], m: &Manifest) -> String {
     let mut h = blake3::Hasher::new();
@@ -63,10 +119,18 @@ struct State {
     /// download directory): sanitized and collision-free.
     paths: Vec<PathBuf>,
     stage: PathBuf,
+    /// Items saved by an earlier, interrupted hand-off of this transfer.
+    placed: Placed,
     hashes: Mutex<Vec<Vec<Option<[u8; 32]>>>>,
     remaining: AtomicU64,
     notify: Notify,
     failure: Mutex<Option<String>>,
+}
+
+impl State {
+    fn data_path(&self, entry: usize) -> PathBuf {
+        data_path(&self.stage, &self.placed, &self.paths[entry])
+    }
 }
 
 fn write_at(f: &std::fs::File, buf: &[u8], offset: u64) -> std::io::Result<()> {
@@ -86,10 +150,67 @@ fn write_at(f: &std::fs::File, buf: &[u8], offset: u64) -> std::io::Result<()> {
     }
 }
 
-/// Prepares the staging area and figures out which chunks are already present.
-fn prepare(stage: &Path, m: &Manifest, paths: &[PathBuf]) -> Result<Vec<HaveChunk>> {
+/// Prepares the staging area and figures out which chunks are already present
+/// (in staging, or in items an interrupted hand-off already saved).
+fn prepare(stage: &Path, m: &Manifest, paths: &[PathBuf]) -> Result<(Vec<HaveChunk>, Placed)> {
     std::fs::create_dir_all(stage)?;
+    let mut placed = read_placed(stage);
+    let journaled = placed.len();
+    placed.retain(|_, dst| std::fs::symlink_metadata(dst).is_ok());
+
+    let mut have = vec![];
+    let log = stage.join(".chunks");
+    if let Ok(bytes) = std::fs::read(&log) {
+        let mut seen = HashSet::new();
+        for rec in bytes.as_chunks::<LOG_RECORD>().0 {
+            let entry = u32::from_be_bytes(rec[0..4].try_into()?);
+            let chunk = u32::from_be_bytes(rec[4..8].try_into()?);
+            let Some(e) = m.entries.get(entry as usize) else { continue };
+            let EntryKind::File { size, .. } = e.kind else { continue };
+            let n = chunk_count(size);
+            if chunk as u64 >= n || !seen.insert((entry, chunk)) {
+                continue;
+            }
+            // Trust the disk, not the log.
+            let path = data_path(stage, &placed, &paths[entry as usize]);
+            let Ok(f) = std::fs::File::open(&path) else { continue };
+            let len = chunk_len(size, chunk as u64) as usize;
+            let mut buf = vec![0u8; len];
+            if read_exact_at(&f, &mut buf, chunk as u64 * CHUNK_SIZE).is_err() {
+                continue;
+            }
+            let hash = chunk_hash(&buf, chunk as u64, n);
+            if rec[8..40] == hash {
+                have.push(HaveChunk { entry, chunk, hash });
+            }
+        }
+    }
+
+    // An already saved item only counts if all of it is still intact where it
+    // was saved; otherwise (edited, partly deleted) it is received again into
+    // staging and saved next to it, never written into.
+    if !placed.is_empty() {
+        let verified: HashSet<(u32, u32)> = have.iter().map(|h| (h.entry, h.chunk)).collect();
+        let mut broken = HashSet::new();
+        for (i, (e, rel)) in m.entries.iter().zip(paths).enumerate() {
+            let (top, _) = split_top(rel);
+            if placed.contains_key(&top) && (0..e.chunks() as u32).any(|c| !verified.contains(&(i as u32, c))) {
+                broken.insert(top);
+            }
+        }
+        if !broken.is_empty() {
+            placed.retain(|top, _| !broken.contains(top));
+            have.retain(|h| !broken.contains(&split_top(&paths[h.entry as usize]).0));
+        }
+    }
+    if placed.len() != journaled {
+        write_placed(stage, &placed);
+    }
+
     for (e, rel) in m.entries.iter().zip(paths) {
+        if placed.contains_key(&split_top(rel).0) {
+            continue;
+        }
         let p = stage.join(rel);
         match e.kind {
             EntryKind::Dir => std::fs::create_dir_all(&p)?,
@@ -100,33 +221,7 @@ fn prepare(stage: &Path, m: &Manifest, paths: &[PathBuf]) -> Result<Vec<HaveChun
             }
         }
     }
-    let mut have = vec![];
-    let log = stage.join(".chunks");
-    let Ok(bytes) = std::fs::read(&log) else { return Ok(have) };
-    let mut seen = HashSet::new();
-    for rec in bytes.as_chunks::<LOG_RECORD>().0 {
-        let entry = u32::from_be_bytes(rec[0..4].try_into()?);
-        let chunk = u32::from_be_bytes(rec[4..8].try_into()?);
-        let Some(e) = m.entries.get(entry as usize) else { continue };
-        let EntryKind::File { size, .. } = e.kind else { continue };
-        let n = chunk_count(size);
-        if chunk as u64 >= n || !seen.insert((entry, chunk)) {
-            continue;
-        }
-        // Trust the disk, not the log.
-        let path = stage.join(&paths[entry as usize]);
-        let Ok(f) = std::fs::File::open(&path) else { continue };
-        let len = chunk_len(size, chunk as u64) as usize;
-        let mut buf = vec![0u8; len];
-        if read_exact_at(&f, &mut buf, chunk as u64 * CHUNK_SIZE).is_err() {
-            continue;
-        }
-        let hash = chunk_hash(&buf, chunk as u64, n);
-        if rec[8..40] == hash {
-            have.push(HaveChunk { entry, chunk, hash });
-        }
-    }
-    Ok(have)
+    Ok((have, placed))
 }
 
 /// What the receiver needs to know about one accepted transfer.
@@ -155,7 +250,7 @@ pub async fn receive(
     let Job { manifest, stage, download_dir, ticket } = job;
     validate(&manifest)?;
     let paths = local_paths(&manifest)?;
-    let have = {
+    let (have, placed) = {
         let (stage, m, paths) = (stage.clone(), manifest.clone(), paths.clone());
         tokio::task::spawn_blocking(move || prepare(&stage, &m, &paths)).await??
     };
@@ -174,6 +269,7 @@ pub async fn receive(
         hashes: Mutex::new(hashes),
         manifest,
         paths,
+        placed,
         notify: Notify::new(),
         failure: Mutex::new(None),
     });
@@ -286,7 +382,7 @@ async fn handle_stream(mut s: quinn::RecvStream, state: &Arc<State>, t: &Arc<Tra
         let wire = (FRAME_HEADER_LEN + payload.len()) as u64;
 
         let st = state.clone();
-        let path = state.stage.join(&state.paths[h.entry as usize]);
+        let path = state.data_path(h.entry as usize);
         tokio::task::spawn_blocking(move || -> Result<()> {
             let data = match h.enc {
                 ENC_RAW => payload,
@@ -350,7 +446,7 @@ fn verify(state: &State, roots: &[[u8; 32]]) -> Result<()> {
         if root != roots[i] {
             bail!("BLAKE3 mismatch for {}", e.path);
         }
-        let p = state.stage.join(&state.paths[i]);
+        let p = state.data_path(i);
         let f = std::fs::OpenOptions::new().write(true).create(true).truncate(false).open(&p)?;
         f.set_len(size)?;
         if mtime_ms > 0 {
@@ -374,9 +470,20 @@ fn verify(state: &State, roots: &[[u8; 32]]) -> Result<()> {
 /// Each item's move is atomic; the set is all or nothing on a best-effort
 /// basis: if one move fails, the items already moved are renamed back into
 /// staging. Should that rollback itself fail (the download folder vanished,
-/// a disk error), those items stay saved and the error names them, so
-/// nothing is lost or silently duplicated; the rest stays staged.
+/// a disk error), those items stay saved, the error names them, and the
+/// `.placed` journal makes the next attempt of this transfer count them as
+/// done instead of saving them again. The rest stays staged.
 fn place(state: &State, download_dir: &Path) -> Result<Vec<String>> {
+    if DEBUG_PLACE_FAULT.swap(false, Ordering::AcqRel) {
+        let calls = std::sync::atomic::AtomicUsize::new(0);
+        let move_in = |from: &Path, dir: &Path, name: &str| {
+            if calls.fetch_add(1, Ordering::AcqRel) == 1 {
+                return Err(std::io::Error::other("injected fault"));
+            }
+            fsx::move_unique(from, dir, name)
+        };
+        return place_with(state, download_dir, move_in, |_, _| Err(std::io::Error::other("injected fault")));
+    }
     place_with(state, download_dir, fsx::move_unique, fsx::rename_noreplace)
 }
 
@@ -388,30 +495,47 @@ fn place_with(
 ) -> Result<Vec<String>> {
     std::fs::create_dir_all(download_dir).context("creating download directory")?;
     let tops = state.manifest.entries.iter().zip(&state.paths).filter(|(e, _)| !e.path.contains('/')).map(|(_, rel)| rel);
-    let mut moved: Vec<(PathBuf, PathBuf)> = vec![];
+    let mut journal = state.placed.clone();
+    let mut saved = vec![];
+    let mut moved: Vec<(&PathBuf, PathBuf, PathBuf)> = vec![];
     for rel in tops {
+        if let Some(dst) = state.placed.get(rel) {
+            saved.push(dst.clone()); // saved by an earlier attempt, verified intact
+            continue;
+        }
         let from = state.stage.join(rel);
         let name = rel.to_string_lossy();
         match move_in(&from, download_dir, &name) {
-            Ok(to) => moved.push((from, to)),
+            Ok(to) => {
+                journal.insert(rel.clone(), to.clone());
+                write_placed(&state.stage, &journal);
+                saved.push(to.clone());
+                moved.push((rel, from, to));
+            }
             Err(e) => {
                 let mut stuck = vec![];
-                for (from, to) in moved.iter().rev() {
-                    if let Err(e) = move_back(to, from) {
-                        tracing::warn!("could not roll back {}: {e}", to.display());
-                        stuck.push(to.display().to_string());
+                for (rel, from, to) in moved.iter().rev() {
+                    match move_back(to, from) {
+                        Ok(()) => {
+                            journal.remove(*rel);
+                        }
+                        Err(e) => {
+                            tracing::warn!("could not roll back {}: {e}", to.display());
+                            stuck.push(to.display().to_string());
+                        }
                     }
                 }
+                write_placed(&state.stage, &journal);
                 let mut msg = format!("cannot save {name} in {}: {e}", download_dir.display());
                 if !stuck.is_empty() {
                     msg += &format!(" (already saved and left in place: {})", stuck.join(", "));
                 }
-                return Err(WarpError::io(msg).into());
+                return Err(SaveError(msg).into());
             }
         }
     }
     let _ = std::fs::remove_dir_all(&state.stage);
-    Ok(moved.into_iter().map(|(_, to)| to.to_string_lossy().into_owned()).collect())
+    Ok(saved.into_iter().map(|p| p.to_string_lossy().into_owned()).collect())
 }
 
 /// Removes staging areas untouched for a week.
@@ -444,6 +568,7 @@ mod tests {
             manifest,
             paths,
             stage,
+            placed: Placed::new(),
             remaining: AtomicU64::new(0),
             notify: Notify::new(),
             failure: Mutex::new(None),
@@ -482,7 +607,7 @@ mod tests {
         std::fs::write(stage.join("first.txt"), b"1").unwrap();
         // "second.txt" is missing from staging, so its move fails.
         let err = place(&st, &dl).unwrap_err();
-        assert!(matches!(err.downcast_ref::<WarpError>(), Some(WarpError::Io { .. })), "{err:#}");
+        assert!(err.downcast_ref::<SaveError>().is_some(), "{err:#}");
         assert!(!dl.join("first.txt").exists(), "first item rolled back");
         assert_eq!(std::fs::read(stage.join("first.txt")).unwrap(), b"1", "and kept in staging");
     }

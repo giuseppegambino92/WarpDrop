@@ -15,6 +15,7 @@ pub mod error;
 pub mod fsx;
 pub mod hashing;
 pub mod identity;
+pub mod limits;
 pub mod manifest;
 pub mod netif;
 pub mod node;

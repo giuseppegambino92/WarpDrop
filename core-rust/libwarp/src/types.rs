@@ -147,6 +147,10 @@ pub struct NodeConfig {
     /// Parallel QUIC data streams per transfer.
     pub parallel_streams: u8,
     pub auto_accept_trusted: bool,
+    /// Memory one incoming transfer may use (MiB); larger transfers are
+    /// declined up front. 0 = automatic: 1/32 of RAM, 32 MiB to 1 GiB.
+    #[serde(default)]
+    pub transfer_memory_mb: u32,
 }
 
 impl NodeConfig {
@@ -168,6 +172,7 @@ impl NodeConfig {
             code_rotation_secs: 600,
             parallel_streams: 6,
             auto_accept_trusted: true,
+            transfer_memory_mb: 0,
         }
     }
 }

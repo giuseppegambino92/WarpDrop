@@ -75,15 +75,24 @@ Encryption and authentication are identical on both.
   (no traversal, Windows-reserved names sanitised, every parent folder
   declared), and names that would land on the same file after sanitising,
   Unicode normalization or case folding are renamed `name (2)` instead.
-  Incoming manifests have an explicit memory budget (≤ 1 M entries, ≤ 2²¹
-  chunks = 8 TiB, so per-chunk state stays under 70 MiB) and are refused up
-  front if they don't fit in the free disk space.
+  Incoming manifests have a memory budget sized to the device: by default
+  1/32 of RAM (32 MiB – 1 GiB; `NodeConfig.transfer_memory_mb` overrides it),
+  a quarter for per-chunk state and the rest for entries; e.g. a 3 GB phone
+  takes up to ~73 k entries and ~2.9 TiB, a 16 GB Mac 393 k entries and the
+  8 TiB hard cap (2²¹ chunks; 1 M entries is the other hard cap). Transfers
+  over budget, or larger than the free disk space, are declined before any
+  data moves (`too_large` / `no_space`).
 * **Hand-off**: verified items move into the download folder with an atomic
   no-replace rename (`renamex_np` / `renameat2` / `MoveFileExW`), so an
   existing file is never overwritten. Each move is atomic; the set is all or
   nothing on a best-effort basis: if one move fails the others are moved back
   into staging, and if a move back fails too, the error lists what stayed in
-  the download folder (nothing is lost or duplicated). On filesystems without
+  the download folder. A `.placed` journal in the staging area records every
+  item already moved, so sending the same items again re-verifies those where
+  they are and neither re-sends nor duplicates them (an item edited in the
+  meantime is left untouched and a fresh copy lands next to it). The journal
+  is written right after each move, so only a crash in that instant can lead
+  to one item being saved twice, never to loss. On filesystems without
   an atomic no-replace rename (FAT/exFAT, some network/FUSE mounts) files fall
   back to hard links (still atomic) and folders to check-then-rename.
 
@@ -110,7 +119,7 @@ Encryption and authentication are identical on both.
 
 | Check | Result |
 |---|---|
-| `cargo test --workspace` | **55 passed**: libwarp 28 unit + 11 end-to-end + 2 resume + 7 relay abuse, warp-signal 1, desktop 6 |
+| `cargo test --workspace` | **60 passed**: libwarp 30 unit + 11 end-to-end + 2 resume + 3 hand-off + 7 relay abuse, warp-signal 1, desktop 6 |
 | `cargo clippy --workspace --all-targets` | 0 warnings |
 | End-to-end tests | code reaches a late-discovered device among decoys · LAN discovery (mDNS + beacon) · code pairing + nested folder bit-for-bit (BLAKE3) · QR ticket · wrong code rejected + rotation · Link My Device + zero-prompt send + ring gossip · stranger prompt + SAS · clipboard · Internet rendezvous direct **and** forced relay · ADB-style USB tunnel · pause/resume/cancel |
 | Resume tests | LAN: connection dropped after 6/11 chunks → automatic reconnect, ≥ 20 MiB skipped, each byte received once. **Internet**: same drop on a rendezvous-only session (hole-punched *and* forced relay) → reconnects via the resumption ticket, no new code, no prompt |

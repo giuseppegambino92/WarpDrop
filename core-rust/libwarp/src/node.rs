@@ -124,6 +124,9 @@ fn new_id() -> String {
 }
 
 fn retryable(e: &anyhow::Error) -> bool {
+    if e.downcast_ref::<receiver::SaveError>().is_some() {
+        return false;
+    }
     if let Some(w) = e.downcast_ref::<WarpError>() {
         return matches!(w, WarpError::Timeout | WarpError::Unreachable { .. } | WarpError::Io { .. });
     }
@@ -151,6 +154,7 @@ fn error_code(e: &anyhow::Error) -> &'static str {
         Some(WarpError::Cancelled) => "cancelled",
         Some(WarpError::Io { .. }) => "io",
         Some(_) => "protocol",
+        None if e.downcast_ref::<receiver::SaveError>().is_some() => "io",
         None if format!("{e:#}").contains("BLAKE3 mismatch") || format!("{e:#}").contains("failed verification") => "integrity",
         None if retryable(e) => "unreachable",
         None => "protocol",
@@ -992,6 +996,11 @@ async fn serve_transfer(
     if let Err(e) = manifest::validate(&manifest) {
         reject(&conn, &mut send, "invalid_manifest").await?;
         return Err(e);
+    }
+    let limits = crate::limits::Limits::for_device(inner.cfg.read().transfer_memory_mb);
+    if !limits.allows(&manifest) {
+        tracing::info!("declining a transfer over this device's budget ({limits:?})");
+        return reject(&conn, &mut send, "too_large").await;
     }
     if !fits_on_disk(inner.download_dir(), &peer_key, &manifest).await {
         // Also bounds the receiver's per-chunk bookkeeping by real disk size.

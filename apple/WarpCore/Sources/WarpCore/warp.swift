@@ -1701,6 +1701,11 @@ public struct NodeConfig {
      */
     public var parallelStreams: UInt8
     public var autoAcceptTrusted: Bool
+    /**
+     * Memory one incoming transfer may use (MiB); larger transfers are
+     * declined up front. 0 = automatic: 1/32 of RAM, 32 MiB to 1 GiB.
+     */
+    public var transferMemoryMb: UInt32
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
@@ -1749,7 +1754,11 @@ public struct NodeConfig {
          */codeRotationSecs: UInt32, 
         /**
          * Parallel QUIC data streams per transfer.
-         */parallelStreams: UInt8, autoAcceptTrusted: Bool) {
+         */parallelStreams: UInt8, autoAcceptTrusted: Bool, 
+        /**
+         * Memory one incoming transfer may use (MiB); larger transfers are
+         * declined up front. 0 = automatic: 1/32 of RAM, 32 MiB to 1 GiB.
+         */transferMemoryMb: UInt32) {
         self.deviceName = deviceName
         self.deviceKind = deviceKind
         self.stateDir = stateDir
@@ -1766,6 +1775,7 @@ public struct NodeConfig {
         self.codeRotationSecs = codeRotationSecs
         self.parallelStreams = parallelStreams
         self.autoAcceptTrusted = autoAcceptTrusted
+        self.transferMemoryMb = transferMemoryMb
     }
 }
 
@@ -1824,6 +1834,9 @@ extension NodeConfig: Equatable, Hashable {
         if lhs.autoAcceptTrusted != rhs.autoAcceptTrusted {
             return false
         }
+        if lhs.transferMemoryMb != rhs.transferMemoryMb {
+            return false
+        }
         return true
     }
 
@@ -1844,6 +1857,7 @@ extension NodeConfig: Equatable, Hashable {
         hasher.combine(codeRotationSecs)
         hasher.combine(parallelStreams)
         hasher.combine(autoAcceptTrusted)
+        hasher.combine(transferMemoryMb)
     }
 }
 
@@ -1871,7 +1885,8 @@ public struct FfiConverterTypeNodeConfig: FfiConverterRustBuffer {
                 forceRelay: FfiConverterBool.read(from: &buf), 
                 codeRotationSecs: FfiConverterUInt32.read(from: &buf), 
                 parallelStreams: FfiConverterUInt8.read(from: &buf), 
-                autoAcceptTrusted: FfiConverterBool.read(from: &buf)
+                autoAcceptTrusted: FfiConverterBool.read(from: &buf), 
+                transferMemoryMb: FfiConverterUInt32.read(from: &buf)
         )
     }
 
@@ -1892,6 +1907,7 @@ public struct FfiConverterTypeNodeConfig: FfiConverterRustBuffer {
         FfiConverterUInt32.write(value.codeRotationSecs, into: &buf)
         FfiConverterUInt8.write(value.parallelStreams, into: &buf)
         FfiConverterBool.write(value.autoAcceptTrusted, into: &buf)
+        FfiConverterUInt32.write(value.transferMemoryMb, into: &buf)
     }
 }
 
