@@ -102,22 +102,39 @@ struct Journal {
 /// key is a top-level item of this manifest and its destination is a direct
 /// child of `download_dir` (the only places `place` ever writes). A missing
 /// journal is the normal "nothing saved yet"; an unreadable or corrupt one is
-/// set aside as `.placed.corrupt` and reported. Either way the outcome is
-/// safe: an item the journal no longer vouches for is received again and
-/// saved under a free name, never written into whatever is at the old one.
-fn read_placed(stage: &Path, download_dir: &Path, tops: &HashSet<&Path>) -> Journal {
+/// set aside as `.placed.corrupt` (or deleted) and reported. Either way the
+/// outcome is safe: an item the journal no longer vouches for is received
+/// again and saved under a free name, never written into whatever is at the
+/// old one. If it can be neither set aside nor deleted, the staging area is
+/// not in a usable state and the transfer fails up front, before any data
+/// is exchanged, with an error naming it.
+fn read_placed(stage: &Path, download_dir: &Path, tops: &HashSet<&Path>) -> std::result::Result<Journal, SaveError> {
     let path = stage.join(PLACED_LOG);
     let parsed = match std::fs::read(&path) {
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Journal { placed: Placed::new(), dropped: false },
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Journal { placed: Placed::new(), dropped: false }),
         Err(e) => Err(e.to_string()),
         Ok(b) => serde_json::from_slice::<BTreeMap<String, String>>(&b).map_err(|e| e.to_string()),
     };
     let raw = match parsed {
         Ok(raw) => raw,
         Err(e) => {
-            tracing::warn!("hand-off journal {} is unreadable ({e}); set aside, its items will be received again", path.display());
-            let _ = std::fs::rename(&path, stage.join(".placed.corrupt"));
-            return Journal { placed: Placed::new(), dropped: true };
+            let aside = stage.join(".placed.corrupt");
+            let removed = std::fs::rename(&path, &aside)
+                .map(|_| format!("set aside as {}", aside.display()))
+                .or_else(|e1| std::fs::remove_file(&path).map(|_| format!("deleted (could not set it aside: {e1})")))
+                .or_else(|e1| std::fs::remove_dir_all(&path).map(|_| format!("deleted (could not set it aside: {e1})")));
+            return match removed {
+                Ok(what) => {
+                    tracing::warn!("hand-off journal {} is unreadable ({e}); {what}; its items will be received again", path.display());
+                    Ok(Journal { placed: Placed::new(), dropped: true })
+                }
+                Err(e2) => Err(SaveError(format!(
+                    "the hand-off journal {} is unreadable ({e}) and cannot be set aside or deleted ({e2}); \
+                     check the folder {} and its disk",
+                    path.display(),
+                    stage.display()
+                ))),
+            };
         }
     };
     let n = raw.len();
@@ -134,7 +151,7 @@ fn read_placed(stage: &Path, download_dir: &Path, tops: &HashSet<&Path>) -> Jour
             ok
         })
         .collect();
-    Journal { dropped: placed.len() != n, placed }
+    Ok(Journal { dropped: placed.len() != n, placed })
 }
 
 fn write_placed(stage: &Path, placed: &Placed) -> std::io::Result<()> {
@@ -235,7 +252,7 @@ fn prepare(stage: &Path, download_dir: &Path, m: &Manifest, paths: &[PathBuf]) -
     std::fs::create_dir_all(stage)?;
     let _ = std::fs::remove_file(stage.join(COMPLETE_MARK));
     let tops: HashSet<&Path> = m.entries.iter().zip(paths).filter(|(e, _)| !e.path.contains('/')).map(|(_, p)| p.as_path()).collect();
-    let Journal { mut placed, dropped } = read_placed(stage, download_dir, &tops);
+    let Journal { mut placed, dropped } = read_placed(stage, download_dir, &tops)?;
     let journaled = if dropped { usize::MAX } else { placed.len() };
     // Still in staging → never moved; gone from the destination → nothing to count.
     let exists = |p: &Path| std::fs::symlink_metadata(p).is_ok();
@@ -947,7 +964,7 @@ mod tests {
         got.sort();
         assert_eq!(got, [0, 1], "moved verified in place, intent in staging, edited must be re-sent");
         let tops = paths.iter().map(PathBuf::as_path).collect();
-        assert_eq!(read_placed(&stage, &dl, &tops).placed, placed, "journal pruned");
+        assert_eq!(read_placed(&stage, &dl, &tops).unwrap().placed, placed, "journal pruned");
     }
 
     #[test]
@@ -982,18 +999,38 @@ mod tests {
         assert_eq!(placed, Placed::from([(PathBuf::from("a.txt"), dl.join("a.txt"))]));
         assert_eq!(have.iter().map(|h| h.entry).collect::<Vec<_>>(), [0], "b and c are received again");
         let tops = paths.iter().map(PathBuf::as_path).collect();
-        assert_eq!(read_placed(&stage, &dl, &tops).placed, placed, "rewritten without the bad entries");
+        assert_eq!(read_placed(&stage, &dl, &tops).unwrap().placed, placed, "rewritten without the bad entries");
 
         // Missing: nothing saved yet, nothing reported. Corrupt: set aside.
         std::fs::remove_file(stage.join(PLACED_LOG)).unwrap();
-        let j = read_placed(&stage, &dl, &tops);
+        let j = read_placed(&stage, &dl, &tops).unwrap();
         assert!(j.placed.is_empty() && !j.dropped);
         std::fs::write(stage.join(PLACED_LOG), b"{\"a.txt\": ").unwrap();
-        let j = read_placed(&stage, &dl, &tops);
+        let j = read_placed(&stage, &dl, &tops).unwrap();
         assert!(j.placed.is_empty() && j.dropped);
         assert!(!stage.join(PLACED_LOG).exists() && stage.join(".placed.corrupt").exists());
         let (_, placed) = prepare(&stage, &dl, &m, &paths).unwrap();
         assert!(placed.is_empty(), "a corrupt journal vouches for nothing");
+
+        // A corrupt journal that cannot be removed: the transfer stops up
+        // front with an error that says so.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::write(stage.join(PLACED_LOG), b"garbage").unwrap();
+            std::fs::set_permissions(&stage, std::fs::Permissions::from_mode(0o555)).unwrap();
+            let enforced = std::fs::write(stage.join("probe"), b"").is_err(); // not on FAT/exFAT/NTFS mounts, or as root
+            if enforced {
+                let err = prepare(&stage, &dl, &m, &paths).unwrap_err();
+                std::fs::set_permissions(&stage, std::fs::Permissions::from_mode(0o755)).unwrap();
+                assert!(err.downcast_ref::<SaveError>().is_some(), "not retried: {err:#}");
+                assert!(format!("{err:#}").contains("cannot be set aside or deleted"), "{err:#}");
+                assert_eq!(std::fs::read(stage.join(PLACED_LOG)).unwrap(), b"garbage", "left for inspection");
+            } else {
+                std::fs::set_permissions(&stage, std::fs::Permissions::from_mode(0o755)).unwrap();
+                eprintln!("permissions not enforced here; skipped the read-only case");
+            }
+        }
     }
 
     #[test]

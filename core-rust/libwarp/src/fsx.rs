@@ -56,9 +56,13 @@ fn fallback(from: &Path, to: &Path) -> io::Result<()> {
 /// name counts as taken and the placeholder is left alone.
 ///
 /// Not atomic: between that last check and the rename, another process with
-/// write access to the folder could still swap the placeholder for its own
-/// file, which the rename would then replace. No system call closes this on
-/// such filesystems; the window is a few microseconds and only exists where
+/// write access to the folder could still swap the placeholder. For a folder
+/// that cannot lose data: renaming a folder only ever replaces an *empty*
+/// folder (a file or a non-empty folder makes it fail). For a file, a file
+/// put there in that window by deleting the placeholder first, or data
+/// written into the placeholder after the check, would be replaced. No
+/// system call closes this on FAT/exFAT (no no-replace rename, no hard
+/// links); the window is a few microseconds and only exists where
 /// `rename_noreplace` falls back to here (see the module docs).
 fn reserve_then_rename(from: &Path, to: &Path) -> io::Result<()> {
     reserve_then_rename_with(from, to, |_| {})
@@ -392,6 +396,27 @@ mod tests {
             Err(e) => format!("no hard links ({e}): files and folders via checked placeholder"),
         };
         println!("FS-CAPABILITIES: {atomic}; {links}");
+    }
+
+    /// What `reserve_then_rename`'s residual window rests on for folders:
+    /// the rename itself refuses to replace a file or a non-empty folder.
+    #[cfg(unix)]
+    #[test]
+    fn a_folder_rename_only_ever_replaces_an_empty_folder() {
+        let d = tempfile::tempdir().unwrap();
+        let p = |n: &str| d.path().join(n);
+        std::fs::create_dir(p("item")).unwrap();
+        std::fs::write(p("item/data"), b"mine").unwrap();
+        std::fs::write(p("a-file"), b"theirs").unwrap();
+        std::fs::create_dir(p("full")).unwrap();
+        std::fs::write(p("full/x"), b"theirs").unwrap();
+        assert!(std::fs::rename(p("item"), p("a-file")).is_err());
+        assert!(std::fs::rename(p("item"), p("full")).is_err());
+        assert_eq!(std::fs::read(p("a-file")).unwrap(), b"theirs");
+        assert_eq!(std::fs::read(p("full/x")).unwrap(), b"theirs");
+        std::fs::create_dir(p("empty")).unwrap();
+        std::fs::rename(p("item"), p("empty")).unwrap();
+        assert_eq!(std::fs::read(p("empty/data")).unwrap(), b"mine");
     }
 
     #[cfg(unix)]
