@@ -134,13 +134,17 @@ Encryption and authentication are identical on both.
   into the placeholder in that instant, would have that file replaced; macOS
   offers no system call on those filesystems that closes this. A crash in
   that instant leaves only the empty placeholder.
-* **Hand-off journal is untrusted input**: an entry is used only if its key
-  is a top-level item of the current transfer and its destination a direct
-  child of the download folder; anything else is dropped and the journal
-  rewritten. A missing journal means nothing was saved yet; an unreadable or
-  corrupt one is set aside as `.placed.corrupt` (or deleted) with a warning,
-  and if it can be neither, the transfer stops before any data is exchanged
-  with an error naming the staging folder (not retried automatically). In every case
+* **Hand-off journal is untrusted input**: it is read only up to the
+  largest size the current transfer could produce (every item under the
+  longest name, worst-case JSON escaping), parsed strictly (versioned, no
+  unknown fields, no item twice), and an entry is used only if its key is a
+  top-level item of the current transfer and its destination a direct child
+  of the download folder; anything else is dropped and the journal
+  rewritten. A missing journal means nothing was saved yet; an unreadable,
+  oversized or malformed one is quarantined whole as `.placed.corrupt`
+  (renamed, never deleted, so it can be inspected), and if even that rename
+  fails, the transfer stops before any data is exchanged with an error
+  naming the staging folder (not retried automatically). In every case
   an item the journal does not vouch for is received again and saved under a
   free name, so a bad journal can cause at worst a second copy, never a
   write outside the download folder or into an existing file.

@@ -21,7 +21,7 @@ use crate::transfer::Transfer;
 use crate::types::TransferState;
 use anyhow::{anyhow, bail, Context, Result};
 use parking_lot::Mutex;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -98,39 +98,89 @@ struct Journal {
     dropped: bool,
 }
 
-/// Reads the journal, trusting nothing in it: an entry is kept only if its
-/// key is a top-level item of this manifest and its destination is a direct
-/// child of `download_dir` (the only places `place` ever writes). A missing
-/// journal is the normal "nothing saved yet"; an unreadable or corrupt one is
-/// set aside as `.placed.corrupt` (or deleted) and reported. Either way the
-/// outcome is safe: an item the journal no longer vouches for is received
-/// again and saved under a free name, never written into whatever is at the
-/// old one. If it can be neither set aside nor deleted, the staging area is
-/// not in a usable state and the transfer fails up front, before any data
-/// is exchanged, with an error naming it.
+/// On-disk form of the journal. Strict: unknown fields, another version or
+/// an item named twice make the whole file corrupt.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct JournalFile {
+    version: u32,
+    placed: Vec<JournalEntry>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct JournalEntry {
+    item: String,
+    to: String,
+}
+
+const JOURNAL_VERSION: u32 = 1;
+
+/// The largest journal this transfer can produce: every top-level item
+/// saved under the longest name `move_unique` picks, with worst-case JSON
+/// escaping (6 bytes per byte). Anything larger is corrupt and is never
+/// read into memory.
+fn journal_limit(download_dir: &Path, tops: &HashSet<&Path>) -> u64 {
+    let dl = download_dir.as_os_str().len() as u64;
+    let per_item = |top: &Path| {
+        let n = top.as_os_str().len() as u64;
+        6 * (n + dl + 1 + n + " (9999)".len() as u64) + 32
+    };
+    tops.iter().map(|t| per_item(t)).sum::<u64>() + 64
+}
+
+/// Reads the journal, trusting nothing in it: it is read only up to
+/// `journal_limit`, parsed strictly (`JournalFile`), and an entry is kept
+/// only if it names a top-level item of this manifest and a destination that
+/// is a direct child of `download_dir` (the only places `place` ever
+/// writes). A missing journal is the normal "nothing saved yet". An
+/// unreadable, oversized or malformed one is quarantined as
+/// `.placed.corrupt` (renamed, never deleted) and reported; the outcome is
+/// safe: an item the journal no longer vouches for is received again and
+/// saved under a free name, never written into whatever is at the old one.
+/// If it cannot even be renamed aside, the staging area is not usable and
+/// the transfer fails up front, before any data is exchanged, with an error
+/// naming it.
 fn read_placed(stage: &Path, download_dir: &Path, tops: &HashSet<&Path>) -> std::result::Result<Journal, SaveError> {
+    use std::io::Read;
     let path = stage.join(PLACED_LOG);
-    let parsed = match std::fs::read(&path) {
+    let limit = journal_limit(download_dir, tops);
+    let parsed = match std::fs::File::open(&path) {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Journal { placed: Placed::new(), dropped: false }),
         Err(e) => Err(e.to_string()),
-        Ok(b) => serde_json::from_slice::<BTreeMap<String, String>>(&b).map_err(|e| e.to_string()),
+        Ok(f) => {
+            let mut bytes = vec![];
+            match f.take(limit + 1).read_to_end(&mut bytes) {
+                Err(e) => Err(e.to_string()),
+                Ok(_) if bytes.len() as u64 > limit => Err(format!("larger than {limit} bytes, the most this transfer can produce")),
+                Ok(_) => serde_json::from_slice::<JournalFile>(&bytes).map_err(|e| e.to_string()).and_then(|j| {
+                    if j.version != JOURNAL_VERSION {
+                        return Err(format!("unknown version {}", j.version));
+                    }
+                    let mut seen = HashSet::new();
+                    match j.placed.iter().find(|e| !seen.insert(e.item.as_str())) {
+                        Some(dup) => Err(format!("{} is listed twice", dup.item)),
+                        None => Ok(j.placed),
+                    }
+                }),
+            }
+        }
     };
     let raw = match parsed {
         Ok(raw) => raw,
         Err(e) => {
             let aside = stage.join(".placed.corrupt");
-            let removed = std::fs::rename(&path, &aside)
-                .map(|_| format!("set aside as {}", aside.display()))
-                .or_else(|e1| std::fs::remove_file(&path).map(|_| format!("deleted (could not set it aside: {e1})")))
-                .or_else(|e1| std::fs::remove_dir_all(&path).map(|_| format!("deleted (could not set it aside: {e1})")));
-            return match removed {
-                Ok(what) => {
-                    tracing::warn!("hand-off journal {} is unreadable ({e}); {what}; its items will be received again", path.display());
+            return match std::fs::rename(&path, &aside) {
+                Ok(()) => {
+                    tracing::warn!(
+                        "hand-off journal {} is corrupt ({e}); quarantined as {}; its items will be received again",
+                        path.display(),
+                        aside.display()
+                    );
                     Ok(Journal { placed: Placed::new(), dropped: true })
                 }
                 Err(e2) => Err(SaveError(format!(
-                    "the hand-off journal {} is unreadable ({e}) and cannot be set aside or deleted ({e2}); \
-                     check the folder {} and its disk",
+                    "the hand-off journal {} is corrupt ({e}) and cannot be quarantined ({e2}); check the folder {} and its disk",
                     path.display(),
                     stage.display()
                 ))),
@@ -140,7 +190,7 @@ fn read_placed(stage: &Path, download_dir: &Path, tops: &HashSet<&Path>) -> std:
     let n = raw.len();
     let placed: Placed = raw
         .into_iter()
-        .map(|(k, v)| (PathBuf::from(k), PathBuf::from(v)))
+        .map(|e| (PathBuf::from(e.item), PathBuf::from(e.to)))
         .filter(|(top, dst)| {
             let ok = tops.contains(top.as_path())
                 && dst.parent() == Some(download_dir)
@@ -155,9 +205,13 @@ fn read_placed(stage: &Path, download_dir: &Path, tops: &HashSet<&Path>) -> std:
 }
 
 fn write_placed(stage: &Path, placed: &Placed) -> std::io::Result<()> {
-    let m: BTreeMap<String, String> =
-        placed.iter().map(|(k, v)| (k.to_string_lossy().into_owned(), v.to_string_lossy().into_owned())).collect();
-    fsx::write_durable(&stage.join(PLACED_LOG), &serde_json::to_vec(&m).map_err(std::io::Error::other)?)
+    let mut entries: Vec<JournalEntry> = placed
+        .iter()
+        .map(|(k, v)| JournalEntry { item: k.to_string_lossy().into_owned(), to: v.to_string_lossy().into_owned() })
+        .collect();
+    entries.sort_by(|a, b| a.item.cmp(&b.item));
+    let file = JournalFile { version: JOURNAL_VERSION, placed: entries };
+    fsx::write_durable(&stage.join(PLACED_LOG), &serde_json::to_vec(&file).map_err(std::io::Error::other)?)
 }
 
 fn log_record(entry: u32, chunk: u32, hash: &[u8; 32]) -> [u8; LOG_RECORD] {
@@ -985,35 +1039,64 @@ mod tests {
             log_chunk(&stage, paths.iter().position(|p| p == Path::new(n)).unwrap() as u32, b"x");
         }
         std::fs::write(dl.join("not-ours.txt"), b"x").unwrap();
-        let journal: BTreeMap<&str, PathBuf> = [
-            ("a.txt", dl.join("a.txt")),
-            ("b.txt", elsewhere.join("b.txt")),       // outside the download folder
-            ("c.txt", dl.join("sub/../c.txt")),       // not a direct child
-            ("../x", dl.join("not-ours.txt")),        // not an item of this transfer
-            ("/etc", dl.join("not-ours.txt")),
-        ]
-        .into_iter()
-        .collect();
-        std::fs::write(stage.join(PLACED_LOG), serde_json::to_vec(&journal).unwrap()).unwrap();
+        let entry = |item: &str, to: PathBuf| JournalEntry { item: item.into(), to: to.to_string_lossy().into_owned() };
+        let journal = |placed: Vec<JournalEntry>| serde_json::to_vec(&JournalFile { version: JOURNAL_VERSION, placed }).unwrap();
+        let entries = || {
+            vec![
+                entry("a.txt", dl.join("a.txt")),
+                entry("b.txt", elsewhere.join("b.txt")), // outside the download folder
+                entry("c.txt", dl.join("sub/../c.txt")), // not a direct child
+                entry("../x", dl.join("not-ours.txt")),  // not an item of this transfer
+                entry("/etc", dl.join("not-ours.txt")),
+            ]
+        };
+        std::fs::write(stage.join(PLACED_LOG), journal(entries())).unwrap();
         let (have, placed) = prepare(&stage, &dl, &m, &paths).unwrap();
         assert_eq!(placed, Placed::from([(PathBuf::from("a.txt"), dl.join("a.txt"))]));
         assert_eq!(have.iter().map(|h| h.entry).collect::<Vec<_>>(), [0], "b and c are received again");
         let tops = paths.iter().map(PathBuf::as_path).collect();
         assert_eq!(read_placed(&stage, &dl, &tops).unwrap().placed, placed, "rewritten without the bad entries");
 
-        // Missing: nothing saved yet, nothing reported. Corrupt: set aside.
+        // Missing: nothing saved yet, nothing reported.
         std::fs::remove_file(stage.join(PLACED_LOG)).unwrap();
         let j = read_placed(&stage, &dl, &tops).unwrap();
         assert!(j.placed.is_empty() && !j.dropped);
-        std::fs::write(stage.join(PLACED_LOG), b"{\"a.txt\": ").unwrap();
-        let j = read_placed(&stage, &dl, &tops).unwrap();
-        assert!(j.placed.is_empty() && j.dropped);
-        assert!(!stage.join(PLACED_LOG).exists() && stage.join(".placed.corrupt").exists());
+
+        // Corrupt in any way: quarantined whole (renamed, never deleted), vouches for nothing.
+        let mut dup = entries();
+        dup.push(entry("a.txt", dl.join("a (2).txt")));
+        let huge = [b"{\"version\":1,\"placed\":[".as_slice(), &vec![b' '; (journal_limit(&dl, &tops) + 1) as usize], b"]}"].concat();
+        let bad: [(&str, Vec<u8>); 6] = [
+            ("truncated", b"{\"version\":1,\"placed\":[".to_vec()),
+            ("an item twice", journal(dup)),
+            ("unknown field", br#"{"version":1,"placed":[],"extra":1}"#.to_vec()),
+            ("unknown version", br#"{"version":2,"placed":[]}"#.to_vec()),
+            ("the old map format", br#"{"a.txt":"/x"}"#.to_vec()),
+            ("larger than this transfer can produce", huge),
+        ];
+        for (what, bytes) in bad {
+            let _ = std::fs::remove_file(stage.join(".placed.corrupt"));
+            std::fs::write(stage.join(PLACED_LOG), &bytes).unwrap();
+            let j = read_placed(&stage, &dl, &tops).unwrap();
+            assert!(j.placed.is_empty() && j.dropped, "{what}");
+            assert!(!stage.join(PLACED_LOG).exists(), "{what}");
+            assert_eq!(std::fs::read(stage.join(".placed.corrupt")).unwrap(), bytes, "{what}: kept intact for inspection");
+        }
         let (_, placed) = prepare(&stage, &dl, &m, &paths).unwrap();
         assert!(placed.is_empty(), "a corrupt journal vouches for nothing");
 
-        // A corrupt journal that cannot be removed: the transfer stops up
-        // front with an error that says so.
+        // A folder where the journal should be: moved aside whole, its
+        // contents untouched (nothing is ever deleted recursively).
+        std::fs::remove_file(stage.join(".placed.corrupt")).unwrap();
+        std::fs::create_dir_all(stage.join(PLACED_LOG).join("inner")).unwrap();
+        std::fs::write(stage.join(PLACED_LOG).join("inner/keep"), b"keep").unwrap();
+        let j = read_placed(&stage, &dl, &tops).unwrap();
+        assert!(j.placed.is_empty() && j.dropped);
+        assert_eq!(std::fs::read(stage.join(".placed.corrupt/inner/keep")).unwrap(), b"keep");
+        std::fs::remove_dir_all(stage.join(".placed.corrupt")).unwrap();
+
+        // A corrupt journal that cannot be quarantined: the transfer stops up
+        // front with an error that says so, and the file is left as it is.
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -1024,7 +1107,7 @@ mod tests {
                 let err = prepare(&stage, &dl, &m, &paths).unwrap_err();
                 std::fs::set_permissions(&stage, std::fs::Permissions::from_mode(0o755)).unwrap();
                 assert!(err.downcast_ref::<SaveError>().is_some(), "not retried: {err:#}");
-                assert!(format!("{err:#}").contains("cannot be set aside or deleted"), "{err:#}");
+                assert!(format!("{err:#}").contains("cannot be quarantined"), "{err:#}");
                 assert_eq!(std::fs::read(stage.join(PLACED_LOG)).unwrap(), b"garbage", "left for inspection");
             } else {
                 std::fs::set_permissions(&stage, std::fs::Permissions::from_mode(0o755)).unwrap();
