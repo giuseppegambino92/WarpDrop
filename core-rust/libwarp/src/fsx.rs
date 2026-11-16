@@ -4,11 +4,16 @@
 //! Guarantees, and where they stop:
 //! * On APFS/HFS+, ext4/btrfs/xfs/f2fs (Android), NTFS and ReFS the
 //!   "is the name free?" check and the rename are one atomic system call.
-//! * Elsewhere (FAT/exFAT, some network and FUSE filesystems) `fallback`
-//!   is used: files are still atomic (a hard link cannot replace), folders
-//!   are check-then-rename, so a folder created by another process in that
-//!   instant could be replaced if it is empty (POSIX `rename` never replaces
-//!   a non-empty folder) or make the move fail, which `move_unique` reports.
+//! * Elsewhere `fallback` is used. Files: a hard link, which cannot replace
+//!   anything. Where there are no hard links (FAT, exFAT) and for folders the
+//!   name is first reserved atomically (`O_EXCL` create / `mkdir`) and the
+//!   item renamed over its own empty placeholder, so nothing anyone else
+//!   created is ever replaced. A crash in that instant leaves the empty
+//!   placeholder behind (the item stays staged and is saved under the next
+//!   free name).
+//!
+//! CI runs the receiving side on ext4, XFS, Btrfs, FAT32, exFAT, NTFS
+//! (ntfs-3g, FUSE), NFS and tmpfs (`scripts/test-filesystems.sh`).
 
 use std::io;
 use std::path::{Path, PathBuf};
@@ -25,20 +30,31 @@ pub fn rename_noreplace(from: &Path, to: &Path) -> io::Result<()> {
 }
 
 /// For filesystems without an atomic no-replace rename (FAT, some network
-/// and FUSE filesystems). Files: a hard link fails atomically if `to` exists.
-/// Folders: best effort, check then rename.
+/// and FUSE filesystems).
 fn fallback(from: &Path, to: &Path) -> io::Result<()> {
     if from.is_file() {
         match std::fs::hard_link(from, to) {
             Ok(()) => return std::fs::remove_file(from),
             Err(e) if e.kind() == io::ErrorKind::AlreadyExists => return Err(e),
-            Err(_) => {}
+            Err(_) => {} // no hard links here
         }
     }
-    if std::fs::symlink_metadata(to).is_ok() {
-        return Err(io::ErrorKind::AlreadyExists.into());
+    reserve_then_rename(from, to)
+}
+
+/// Claims `to` atomically with an empty placeholder (fails if the name is
+/// taken), then renames `from` over that placeholder, which is the only thing
+/// it can replace.
+fn reserve_then_rename(from: &Path, to: &Path) -> io::Result<()> {
+    let dir = from.is_dir();
+    if dir {
+        std::fs::create_dir(to)?;
+    } else {
+        std::fs::OpenOptions::new().write(true).create_new(true).open(to)?;
     }
-    std::fs::rename(from, to)
+    std::fs::rename(from, to).inspect_err(|_| {
+        let _ = if dir { std::fs::remove_dir(to) } else { std::fs::remove_file(to) };
+    })
 }
 
 /// Moves `from` into `dir` as `name`, or `name (2)`, `name (3)`, … if taken.
@@ -296,6 +312,19 @@ mod tests {
         assert_eq!(fallback(&p("d1"), &p("d2")).unwrap_err().kind(), io::ErrorKind::AlreadyExists);
         fallback(&p("d1"), &p("d3")).unwrap();
         assert!(p("d3/x").exists() && !p("d1").exists());
+
+        // Without hard links (FAT, exFAT): reserve, then rename over the placeholder.
+        std::fs::write(p("f4"), b"4").unwrap();
+        assert_eq!(reserve_then_rename(&p("f4"), &p("f2")).unwrap_err().kind(), io::ErrorKind::AlreadyExists);
+        assert_eq!(std::fs::read(p("f2")).unwrap(), b"2");
+        reserve_then_rename(&p("f4"), &p("f5")).unwrap();
+        assert!(!p("f4").exists() && std::fs::read(p("f5")).unwrap() == b"4");
+        std::fs::create_dir(p("d4")).unwrap();
+        std::fs::write(p("d4/y"), b"y").unwrap();
+        assert_eq!(reserve_then_rename(&p("d4"), &p("d2")).unwrap_err().kind(), io::ErrorKind::AlreadyExists);
+        assert!(p("d2").read_dir().unwrap().next().is_none(), "the existing empty folder is untouched");
+        reserve_then_rename(&p("d4"), &p("d5")).unwrap();
+        assert!(p("d5/y").exists() && !p("d4").exists());
     }
 
     #[test]

@@ -94,9 +94,14 @@ Encryption and authentication are identical on both.
   names each destination *before* its rename (temp file, fsync, rename, fsync
   of the folder); if it cannot be written, nothing moves. On the next attempt
   an entry counts only if its item has left staging and is intact at the
-  destination, so sending the same items again re-verifies saved items in
-  place and neither re-sends nor duplicates them (an item edited in the
-  meantime is left untouched and a fresh copy lands next to it). Before the
+  destination (every entry present with its kind and size, every chunk
+  re-hashed), so sending the same items again re-verifies saved items in
+  place and neither re-sends nor duplicates them. An item edited, grown,
+  moved away or partly deleted in the meantime is left untouched and a fresh
+  copy lands next to it (or at its old name, if that is free again).
+  Before anything is renamed, each received file's data and the chunk log
+  are synced (`fdatasync`; on Apple a plain `fsync` per file and one
+  `F_FULLFSYNC`), so a saved name never points at lost data. Before the
   sender is told "done", the download folder is synced (renames are
   write-through on Windows) and the staging area is marked complete; it then
   holds only the journal and chunk log for 30 minutes, so a retry of the same
@@ -105,10 +110,19 @@ Encryption and authentication are identical on both.
   hand-off (before/after each journal write, after each rename, after the
   sync, after the mark); each time the next attempt finds every chunk
   accounted for and ends with each item saved exactly once and existing files
-  untouched. Power loss is not simulated: there, durability rests on the
-  filesystem honouring fsync (`F_FULLFSYNC` on Apple platforms). On filesystems without
-  an atomic no-replace rename (FAT/exFAT, some network/FUSE mounts) files fall
-  back to hard links (still atomic) and folders to check-then-rename.
+  untouched. In CI the same test also runs on LazyFS, which discards every
+  write not yet synced after each kill (a power cut), and is checked to fail
+  when a sync is removed. LazyFS simulates lost file data; lost directory
+  updates are not simulated and rest on the directory syncs above and on the
+  filesystem honouring them. The whole receiving side is also tested with
+  its folders on APFS, HFS+, exFAT and FAT32 (macOS disk images) and in CI on
+  ext4, XFS, Btrfs, FAT32, exFAT, NTFS via ntfs-3g (FUSE), NFS 4.2 and tmpfs
+  (`scripts/test-filesystems.sh`). Where the filesystem has no atomic
+  no-replace rename (FAT/exFAT, some network/FUSE mounts) files fall back to
+  a hard link, and without hard links (FAT/exFAT) or for folders the name is
+  first claimed atomically with an empty placeholder that the item is then
+  renamed over: nothing created by anyone else is ever replaced, and a crash
+  in that instant leaves only the empty placeholder.
 
 ### Transfer engine
 * Folders stream **on the fly** (no zip): manifest + chunk frames over N
@@ -133,7 +147,7 @@ Encryption and authentication are identical on both.
 
 | Check | Result |
 |---|---|
-| `cargo test --workspace` | **66 passed**: libwarp 36 unit + 11 end-to-end + 2 resume + 3 hand-off + 7 relay abuse, warp-signal 1, desktop 6 |
+| `cargo test --workspace` | **67 passed**: libwarp 36 unit + 11 end-to-end + 2 resume + 4 hand-off + 7 relay abuse, warp-signal 1, desktop 6 |
 | `cargo clippy --workspace --all-targets` | 0 warnings |
 | End-to-end tests | code reaches a late-discovered device among decoys · LAN discovery (mDNS + beacon) · code pairing + nested folder bit-for-bit (BLAKE3) · QR ticket · wrong code rejected + rotation · Link My Device + zero-prompt send + ring gossip · stranger prompt + SAS · clipboard · Internet rendezvous direct **and** forced relay · ADB-style USB tunnel · pause/resume/cancel |
 | Resume tests | LAN: connection dropped after 6/11 chunks → automatic reconnect, ≥ 20 MiB skipped, each byte received once. **Internet**: same drop on a rendezvous-only session (hole-punched *and* forced relay) → reconnects via the resumption ticket, no new code, no prompt |

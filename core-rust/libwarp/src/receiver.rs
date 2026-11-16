@@ -827,7 +827,9 @@ mod tests {
                 std::fs::write(stage.join(&paths[i]), data).unwrap();
                 log_chunk(&stage, i as u32, data);
             }
-            std::fs::write(dl.join("a.txt"), b"theirs").unwrap(); // forces a rename collision
+            // A file saved long before (so on disk); forces a rename collision.
+            std::fs::write(dl.join("a.txt"), b"theirs").unwrap();
+            std::fs::File::open(dl.join("a.txt")).unwrap().sync_all().unwrap();
 
             let status = std::process::Command::new(&exe)
                 .args(["receiver::tests::crash_child", "--exact", "--test-threads=1"])
