@@ -2,18 +2,25 @@
 //! a rename that never replaces an existing name, and free-space queries.
 //!
 //! Guarantees, and where they stop:
-//! * On APFS/HFS+, ext4/btrfs/xfs/f2fs (Android), NTFS and ReFS the
-//!   "is the name free?" check and the rename are one atomic system call.
-//! * Elsewhere `fallback` is used. Files: a hard link, which cannot replace
-//!   anything. Where there are no hard links (FAT, exFAT) and for folders the
-//!   name is first reserved atomically (`O_EXCL` create / `mkdir`) and the
-//!   item renamed over its own empty placeholder, so nothing anyone else
-//!   created is ever replaced. A crash in that instant leaves the empty
-//!   placeholder behind (the item stays staged and is saved under the next
-//!   free name).
+//! * Atomic (the "is the name free?" check and the move are one system
+//!   call): APFS, HFS+ and, on macOS, any filesystem supporting
+//!   `RENAME_EXCL`; ext4, XFS, Btrfs, F2FS (Android), tmpfs on Linux
+//!   (`RENAME_NOREPLACE`); every filesystem on Windows (`MoveFileExW`
+//!   without `MOVEFILE_REPLACE_EXISTING`).
+//! * Elsewhere `fallback` is used. Files: a hard link, also atomic (a link
+//!   never replaces), where the filesystem has them (NFS, ntfs-3g and other
+//!   FUSE filesystems usually do). Without hard links (FAT and exFAT on macOS
+//!   and Linux) and for folders: the name is claimed with an empty
+//!   placeholder and the item is renamed over it after checking it is still
+//!   that placeholder (`reserve_then_rename`). This never replaces a file
+//!   another program *saved* under that name, but it is not atomic against a
+//!   program that deliberately swaps the placeholder in the instant before
+//!   the rename. A crash in that instant leaves the empty placeholder behind
+//!   (the item stays staged and is saved under the next free name).
 //!
 //! CI runs the receiving side on ext4, XFS, Btrfs, FAT32, exFAT, NTFS
-//! (ntfs-3g, FUSE), NFS and tmpfs (`scripts/test-filesystems.sh`).
+//! (ntfs-3g, FUSE), NFS and tmpfs and prints which of these paths each one
+//! takes (`scripts/test-filesystems.sh`).
 
 use std::io;
 use std::path::{Path, PathBuf};
@@ -43,17 +50,47 @@ fn fallback(from: &Path, to: &Path) -> io::Result<()> {
 }
 
 /// Claims `to` atomically with an empty placeholder (fails if the name is
-/// taken), then renames `from` over that placeholder, which is the only thing
-/// it can replace.
+/// taken), then renames `from` over it once it is confirmed to still be that
+/// placeholder: the same file (device and inode, checked against the handle
+/// that created it), still empty. If anything else has happened to it, the
+/// name counts as taken and the placeholder is left alone.
+///
+/// Not atomic: between that last check and the rename, another process with
+/// write access to the folder could still swap the placeholder for its own
+/// file, which the rename would then replace. No system call closes this on
+/// such filesystems; the window is a few microseconds and only exists where
+/// `rename_noreplace` falls back to here (see the module docs).
 fn reserve_then_rename(from: &Path, to: &Path) -> io::Result<()> {
+    reserve_then_rename_with(from, to, |_| {})
+}
+
+/// `reserve_then_rename`, calling `meanwhile` right after the claim (tests
+/// play the other process there).
+fn reserve_then_rename_with(from: &Path, to: &Path, meanwhile: impl FnOnce(&Path)) -> io::Result<()> {
     let dir = from.is_dir();
-    if dir {
+    // A failed claim leaves `to` alone: whatever is there is not ours.
+    let claim = if dir {
         std::fs::create_dir(to)?;
+        // Ours, but not yet open: only an empty folder is removed again.
+        std::fs::File::open(to).inspect_err(|_| {
+            let _ = std::fs::remove_dir(to);
+        })?
     } else {
-        std::fs::OpenOptions::new().write(true).create_new(true).open(to)?;
+        std::fs::OpenOptions::new().write(true).create_new(true).open(to)?
+    };
+    meanwhile(to);
+    let still_ours = || -> io::Result<bool> {
+        let (mine, there) = (claim.metadata()?, std::fs::symlink_metadata(to)?);
+        let empty = if dir { std::fs::read_dir(to)?.next().is_none() } else { mine.len() == 0 && there.len() == 0 };
+        Ok(sys::same_file(&mine, &there) && there.is_dir() == dir && empty)
+    };
+    if !still_ours().unwrap_or(false) {
+        return Err(io::Error::new(io::ErrorKind::AlreadyExists, format!("{} changed while reserved", to.display())));
     }
     std::fs::rename(from, to).inspect_err(|_| {
-        let _ = if dir { std::fs::remove_dir(to) } else { std::fs::remove_file(to) };
+        if still_ours().unwrap_or(false) {
+            let _ = if dir { std::fs::remove_dir(to) } else { std::fs::remove_file(to) };
+        }
     })
 }
 
@@ -173,6 +210,11 @@ mod sys {
         Err(io::Error::from_raw_os_error(libc::ENOSYS))
     }
 
+    pub fn same_file(a: &std::fs::Metadata, b: &std::fs::Metadata) -> bool {
+        use std::os::unix::fs::MetadataExt;
+        a.dev() == b.dev() && a.ino() == b.ino()
+    }
+
     pub fn unsupported(e: &io::Error) -> bool {
         matches!(e.raw_os_error(), Some(code) if code == libc::EINVAL || code == libc::ENOSYS || code == libc::ENOTSUP || code == libc::EOPNOTSUPP)
     }
@@ -261,6 +303,11 @@ mod sys {
         Ok(())
     }
 
+    /// Unused: Windows never falls back (see `rename_noreplace`).
+    pub fn same_file(_a: &std::fs::Metadata, _b: &std::fs::Metadata) -> bool {
+        false
+    }
+
     pub fn unsupported(_e: &io::Error) -> bool {
         false
     }
@@ -325,6 +372,64 @@ mod tests {
         assert!(p("d2").read_dir().unwrap().next().is_none(), "the existing empty folder is untouched");
         reserve_then_rename(&p("d4"), &p("d5")).unwrap();
         assert!(p("d5/y").exists() && !p("d4").exists());
+    }
+
+    /// Which no-replace path this filesystem takes (`TMPDIR`). Run by
+    /// `scripts/test-filesystems.sh`.
+    #[test]
+    #[ignore]
+    fn report_capabilities() {
+        let d = tempfile::tempdir().unwrap();
+        let p = |n: &str| d.path().join(n);
+        std::fs::write(p("a"), b"a").unwrap();
+        let atomic = match sys::rename_noreplace(&p("a"), &p("b")) {
+            Ok(()) => "atomic no-replace rename".to_string(),
+            Err(e) => format!("no atomic no-replace rename ({e})"),
+        };
+        std::fs::write(p("c"), b"c").unwrap();
+        let links = match std::fs::hard_link(p("c"), p("d")) {
+            Ok(()) => "hard links: files atomic, folders via checked placeholder".to_string(),
+            Err(e) => format!("no hard links ({e}): files and folders via checked placeholder"),
+        };
+        println!("FS-CAPABILITIES: {atomic}; {links}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_placeholder_that_changed_is_never_replaced() {
+        let d = tempfile::tempdir().unwrap();
+        let p = |n: &str| d.path().join(n);
+        type Tamper = (&'static str, fn(&Path));
+        let tampers: [Tamper; 4] = [
+            ("written into", |to| std::fs::write(to, b"theirs").unwrap()),
+            ("swapped for another empty file", |to| {
+                std::fs::remove_file(to).unwrap();
+                std::fs::write(to, b"").unwrap();
+            }),
+            ("swapped for a folder", |to| {
+                std::fs::remove_file(to).unwrap();
+                std::fs::create_dir(to).unwrap();
+            }),
+            ("removed", |to| std::fs::remove_file(to).unwrap()),
+        ];
+        for (what, tamper) in tampers {
+            std::fs::write(p("mine"), b"mine").unwrap();
+            let err = reserve_then_rename_with(&p("mine"), &p("x"), tamper).unwrap_err();
+            assert_eq!(err.kind(), io::ErrorKind::AlreadyExists, "{what}");
+            assert_eq!(std::fs::read(p("mine")).unwrap(), b"mine", "{what}: nothing moved");
+            match what {
+                "written into" => assert_eq!(std::fs::read(p("x")).unwrap(), b"theirs"),
+                "swapped for a folder" => assert!(p("x").is_dir()),
+                "removed" => assert!(!p("x").exists()),
+                _ => assert_eq!(std::fs::read(p("x")).unwrap(), b""),
+            }
+            let _ = std::fs::remove_file(p("x")).or_else(|_| std::fs::remove_dir(p("x")));
+        }
+        // A folder placeholder that someone puts a file into.
+        std::fs::create_dir(p("dir")).unwrap();
+        let err = reserve_then_rename_with(&p("dir"), &p("y"), |to| std::fs::write(to.join("theirs"), b"t").unwrap()).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::AlreadyExists);
+        assert!(p("y/theirs").exists() && p("dir").is_dir());
     }
 
     #[test]

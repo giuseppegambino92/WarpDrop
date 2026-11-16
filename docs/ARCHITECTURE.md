@@ -117,12 +117,26 @@ Encryption and authentication are identical on both.
   filesystem honouring them. The whole receiving side is also tested with
   its folders on APFS, HFS+, exFAT and FAT32 (macOS disk images) and in CI on
   ext4, XFS, Btrfs, FAT32, exFAT, NTFS via ntfs-3g (FUSE), NFS 4.2 and tmpfs
-  (`scripts/test-filesystems.sh`). Where the filesystem has no atomic
-  no-replace rename (FAT/exFAT, some network/FUSE mounts) files fall back to
-  a hard link, and without hard links (FAT/exFAT) or for folders the name is
-  first claimed atomically with an empty placeholder that the item is then
-  renamed over: nothing created by anyone else is ever replaced, and a crash
-  in that instant leaves only the empty placeholder.
+  (`scripts/test-filesystems.sh`, which also prints the path each takes).
+  The no-replace rename is one atomic system call on APFS/HFS+, ext4, XFS,
+  Btrfs, F2FS, tmpfs and on every Windows filesystem. Elsewhere files fall
+  back to a hard link (also atomic) where the filesystem has them (NFS,
+  ntfs-3g); without hard links (FAT/exFAT on macOS and Linux) and for
+  folders the name is claimed with an empty placeholder, and the item is
+  renamed over it only after checking it is still that placeholder (same
+  device and inode as the handle that created it, still empty). That never
+  replaces a file another program saved under the name, but it is **not
+  atomic**: a process deliberately swapping the placeholder in the
+  microseconds between the check and the rename would have its file
+  replaced. A crash in that instant leaves only the empty placeholder.
+* **Hand-off journal is untrusted input**: an entry is used only if its key
+  is a top-level item of the current transfer and its destination a direct
+  child of the download folder; anything else is dropped and the journal
+  rewritten. A missing journal means nothing was saved yet; an unreadable or
+  corrupt one is set aside as `.placed.corrupt` with a warning. In every case
+  an item the journal does not vouch for is received again and saved under a
+  free name, so a bad journal can cause at worst a second copy, never a
+  write outside the download folder or into an existing file.
 
 ### Transfer engine
 * Folders stream **on the fly** (no zip): manifest + chunk frames over N
@@ -147,7 +161,7 @@ Encryption and authentication are identical on both.
 
 | Check | Result |
 |---|---|
-| `cargo test --workspace` | **67 passed**: libwarp 36 unit + 11 end-to-end + 2 resume + 4 hand-off + 7 relay abuse, warp-signal 1, desktop 6 |
+| `cargo test --workspace` | **69 passed**: libwarp 38 unit + 11 end-to-end + 2 resume + 4 hand-off + 7 relay abuse, warp-signal 1, desktop 6 |
 | `cargo clippy --workspace --all-targets` | 0 warnings |
 | End-to-end tests | code reaches a late-discovered device among decoys · LAN discovery (mDNS + beacon) · code pairing + nested folder bit-for-bit (BLAKE3) · QR ticket · wrong code rejected + rotation · Link My Device + zero-prompt send + ring gossip · stranger prompt + SAS · clipboard · Internet rendezvous direct **and** forced relay · ADB-style USB tunnel · pause/resume/cancel |
 | Resume tests | LAN: connection dropped after 6/11 chunks → automatic reconnect, ≥ 20 MiB skipped, each byte received once. **Internet**: same drop on a rendezvous-only session (hole-punched *and* forced relay) → reconnects via the resumption ticket, no new code, no prompt |

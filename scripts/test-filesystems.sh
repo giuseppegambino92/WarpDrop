@@ -23,7 +23,10 @@ run_on() { # fs mountpoint
   echo "::group::$1 ($(findmnt -no FSTYPE "$2"))"
   TMPDIR="$2" cargo test --locked -p libwarp "${TESTS[@]}"
   echo "::endgroup::"
+  CAPS+="$1: $(TMPDIR="$2" cargo test -q --locked -p libwarp --lib fsx::tests::report_capabilities -- --ignored --nocapture |
+    sed -n 's/^FS-CAPABILITIES: //p')"$'\n'
 }
+CAPS=""
 
 image() { # fs → path of a fresh 1 GiB image
   truncate -s 1G "$WORK/$1.img"
@@ -111,3 +114,4 @@ for fs in $FS; do
   run_on "$fs" "$m"
 done
 echo "all filesystems passed: $FS"
+printf '\nHow each one avoids replacing an existing name:\n%s' "$CAPS"

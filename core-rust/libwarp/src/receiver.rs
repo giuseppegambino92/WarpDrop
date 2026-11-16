@@ -91,12 +91,50 @@ fn completed_long_ago(stage: &Path) -> bool {
 /// Top-level item (relative path, one component) → where it was saved.
 type Placed = HashMap<PathBuf, PathBuf>;
 
-fn read_placed(stage: &Path) -> Placed {
-    std::fs::read(stage.join(PLACED_LOG))
-        .ok()
-        .and_then(|b| serde_json::from_slice::<BTreeMap<String, String>>(&b).ok())
-        .map(|m| m.into_iter().map(|(k, v)| (PathBuf::from(k), PathBuf::from(v))).collect())
-        .unwrap_or_default()
+/// The journal as read back: entries that pass `read_placed`'s checks, and
+/// whether anything was dropped (so it is rewritten).
+struct Journal {
+    placed: Placed,
+    dropped: bool,
+}
+
+/// Reads the journal, trusting nothing in it: an entry is kept only if its
+/// key is a top-level item of this manifest and its destination is a direct
+/// child of `download_dir` (the only places `place` ever writes). A missing
+/// journal is the normal "nothing saved yet"; an unreadable or corrupt one is
+/// set aside as `.placed.corrupt` and reported. Either way the outcome is
+/// safe: an item the journal no longer vouches for is received again and
+/// saved under a free name, never written into whatever is at the old one.
+fn read_placed(stage: &Path, download_dir: &Path, tops: &HashSet<&Path>) -> Journal {
+    let path = stage.join(PLACED_LOG);
+    let parsed = match std::fs::read(&path) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Journal { placed: Placed::new(), dropped: false },
+        Err(e) => Err(e.to_string()),
+        Ok(b) => serde_json::from_slice::<BTreeMap<String, String>>(&b).map_err(|e| e.to_string()),
+    };
+    let raw = match parsed {
+        Ok(raw) => raw,
+        Err(e) => {
+            tracing::warn!("hand-off journal {} is unreadable ({e}); set aside, its items will be received again", path.display());
+            let _ = std::fs::rename(&path, stage.join(".placed.corrupt"));
+            return Journal { placed: Placed::new(), dropped: true };
+        }
+    };
+    let n = raw.len();
+    let placed: Placed = raw
+        .into_iter()
+        .map(|(k, v)| (PathBuf::from(k), PathBuf::from(v)))
+        .filter(|(top, dst)| {
+            let ok = tops.contains(top.as_path())
+                && dst.parent() == Some(download_dir)
+                && dst.file_name().is_some_and(|n| Path::new(n).components().eq([std::path::Component::Normal(n)]));
+            if !ok {
+                tracing::warn!("ignoring hand-off journal entry {} → {}", top.display(), dst.display());
+            }
+            ok
+        })
+        .collect();
+    Journal { dropped: placed.len() != n, placed }
 }
 
 fn write_placed(stage: &Path, placed: &Placed) -> std::io::Result<()> {
@@ -189,15 +227,16 @@ fn write_at(f: &std::fs::File, buf: &[u8], offset: u64) -> std::io::Result<()> {
 
 /// Prepares the staging area and figures out which chunks are already present
 /// (in staging, or in items an interrupted hand-off already saved).
-fn prepare(stage: &Path, m: &Manifest, paths: &[PathBuf]) -> Result<(Vec<HaveChunk>, Placed)> {
+fn prepare(stage: &Path, download_dir: &Path, m: &Manifest, paths: &[PathBuf]) -> Result<(Vec<HaveChunk>, Placed)> {
     if completed_long_ago(stage) {
         // Same items sent again later: a new, independent copy.
         std::fs::remove_dir_all(stage)?;
     }
     std::fs::create_dir_all(stage)?;
     let _ = std::fs::remove_file(stage.join(COMPLETE_MARK));
-    let mut placed = read_placed(stage);
-    let journaled = placed.len();
+    let tops: HashSet<&Path> = m.entries.iter().zip(paths).filter(|(e, _)| !e.path.contains('/')).map(|(_, p)| p.as_path()).collect();
+    let Journal { mut placed, dropped } = read_placed(stage, download_dir, &tops);
+    let journaled = if dropped { usize::MAX } else { placed.len() };
     // Still in staging → never moved; gone from the destination → nothing to count.
     let exists = |p: &Path| std::fs::symlink_metadata(p).is_ok();
     placed.retain(|top, dst| !exists(&stage.join(top)) && exists(dst));
@@ -332,8 +371,8 @@ pub async fn receive(
     validate(&manifest)?;
     let paths = local_paths(&manifest)?;
     let (have, placed) = {
-        let (stage, m, paths) = (stage.clone(), manifest.clone(), paths.clone());
-        tokio::task::spawn_blocking(move || prepare(&stage, &m, &paths)).await??
+        let (stage, dl, m, paths) = (stage.clone(), download_dir.clone(), manifest.clone(), paths.clone());
+        tokio::task::spawn_blocking(move || prepare(&stage, &dl, &m, &paths)).await??
     };
 
     let mut hashes: Vec<Vec<Option<[u8; 32]>>> = manifest.entries.iter().map(|e| vec![None; e.chunks() as usize]).collect();
@@ -768,7 +807,7 @@ mod tests {
     fn recover(stage: &Path) -> (State, usize) {
         let m = crash_manifest();
         let paths = local_paths(&m).unwrap();
-        let (have, placed) = prepare(stage, &m, &paths).unwrap();
+        let (have, placed) = prepare(stage, &stage.parent().unwrap().join("dl"), &m, &paths).unwrap();
         let mut st = state(stage.to_path_buf(), m.entries);
         st.placed = placed;
         let mut hashes: Vec<Vec<Option<[u8; 32]>>> = st.manifest.entries.iter().map(|e| vec![None; e.chunks() as usize]).collect();
@@ -902,12 +941,59 @@ mod tests {
         let journal: Placed = ["moved.txt", "intent.txt", "edited.txt"].iter().map(|n| (PathBuf::from(n), dl.join(n))).collect();
         write_placed(&stage, &journal).unwrap();
 
-        let (have, placed) = prepare(&stage, &m, &paths).unwrap();
+        let (have, placed) = prepare(&stage, &dl, &m, &paths).unwrap();
         assert_eq!(placed.keys().collect::<Vec<_>>(), [&PathBuf::from("moved.txt")]);
         let mut got: Vec<u32> = have.iter().map(|h| h.entry).collect();
         got.sort();
         assert_eq!(got, [0, 1], "moved verified in place, intent in staging, edited must be re-sent");
-        assert_eq!(read_placed(&stage), placed, "journal pruned");
+        let tops = paths.iter().map(PathBuf::as_path).collect();
+        assert_eq!(read_placed(&stage, &dl, &tops).placed, placed, "journal pruned");
+    }
+
+    #[test]
+    fn the_journal_is_validated_and_a_corrupt_one_set_aside() {
+        let d = tempfile::tempdir().unwrap();
+        let (stage, dl) = (d.path().join("stage"), d.path().join("dl"));
+        std::fs::create_dir_all(&stage).unwrap();
+        std::fs::create_dir_all(&dl).unwrap();
+        let elsewhere = d.path().join("elsewhere");
+        std::fs::create_dir_all(&elsewhere).unwrap();
+        let m = Manifest { entries: vec![sized("a.txt", 1), sized("b.txt", 1), sized("c.txt", 1)] };
+        let paths = local_paths(&m).unwrap();
+        // Every item left staging and has identical content at the journal's
+        // destination, but only "a" is somewhere `place` could have put it.
+        for (n, dst) in [("a.txt", dl.join("a.txt")), ("b.txt", elsewhere.join("b.txt")), ("c.txt", dl.join("sub/../c.txt"))] {
+            std::fs::create_dir_all(dst.parent().unwrap()).unwrap();
+            std::fs::write(&dst, b"x").unwrap();
+            log_chunk(&stage, paths.iter().position(|p| p == Path::new(n)).unwrap() as u32, b"x");
+        }
+        std::fs::write(dl.join("not-ours.txt"), b"x").unwrap();
+        let journal: BTreeMap<&str, PathBuf> = [
+            ("a.txt", dl.join("a.txt")),
+            ("b.txt", elsewhere.join("b.txt")),       // outside the download folder
+            ("c.txt", dl.join("sub/../c.txt")),       // not a direct child
+            ("../x", dl.join("not-ours.txt")),        // not an item of this transfer
+            ("/etc", dl.join("not-ours.txt")),
+        ]
+        .into_iter()
+        .collect();
+        std::fs::write(stage.join(PLACED_LOG), serde_json::to_vec(&journal).unwrap()).unwrap();
+        let (have, placed) = prepare(&stage, &dl, &m, &paths).unwrap();
+        assert_eq!(placed, Placed::from([(PathBuf::from("a.txt"), dl.join("a.txt"))]));
+        assert_eq!(have.iter().map(|h| h.entry).collect::<Vec<_>>(), [0], "b and c are received again");
+        let tops = paths.iter().map(PathBuf::as_path).collect();
+        assert_eq!(read_placed(&stage, &dl, &tops).placed, placed, "rewritten without the bad entries");
+
+        // Missing: nothing saved yet, nothing reported. Corrupt: set aside.
+        std::fs::remove_file(stage.join(PLACED_LOG)).unwrap();
+        let j = read_placed(&stage, &dl, &tops);
+        assert!(j.placed.is_empty() && !j.dropped);
+        std::fs::write(stage.join(PLACED_LOG), b"{\"a.txt\": ").unwrap();
+        let j = read_placed(&stage, &dl, &tops);
+        assert!(j.placed.is_empty() && j.dropped);
+        assert!(!stage.join(PLACED_LOG).exists() && stage.join(".placed.corrupt").exists());
+        let (_, placed) = prepare(&stage, &dl, &m, &paths).unwrap();
+        assert!(placed.is_empty(), "a corrupt journal vouches for nothing");
     }
 
     #[test]
@@ -925,14 +1011,14 @@ mod tests {
             f.write_all(&log_record(i % 3, i, &[7; 32])).unwrap();
         }
         drop(f);
-        let (have, _) = prepare(&stage, &m, &paths).unwrap();
+        let (have, _) = prepare(&stage, &d.path().join("dl"), &m, &paths).unwrap();
         assert_eq!(have.len(), 1);
         assert_eq!(std::fs::metadata(stage.join(".chunks")).unwrap().len(), LOG_RECORD as u64, "compacted to the verified record");
         // Junk before the good record beyond the read limit is not even read.
         let junk: Vec<u8> = (0..100u32).flat_map(|i| log_record(5, i, &[0; 32])).collect();
         std::fs::write(stage.join(".chunks"), junk).unwrap();
         log_chunk(&stage, 0, b"abc");
-        let (have, _) = prepare(&stage, &m, &paths).unwrap();
+        let (have, _) = prepare(&stage, &d.path().join("dl"), &m, &paths).unwrap();
         assert!(have.is_empty(), "limit is 2 × chunks + 64 records");
     }
 
