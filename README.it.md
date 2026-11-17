@@ -5,14 +5,38 @@
 <h1 align="center">WarpDrop</h1>
 
 <p align="center">
-  Trasferimento di file, cartelle e appunti con crittografia end-to-end tra<br>
-  <b>macOS · iOS · Android · Windows · Linux</b><br>
-  via cavo USB, rete locale o Internet.
+  <b>Come AirDrop, ma tra tutti i tuoi dispositivi: Mac, iPhone, Android, Windows e Linux.</b>
 </p>
+
+<p align="center">
+  <a href="https://github.com/giuseppegambino92/WarpDrop/releases/latest"><img src="https://img.shields.io/github/v/release/giuseppegambino92/WarpDrop" alt="Ultima versione"></a>
+  <a href="https://github.com/giuseppegambino92/WarpDrop/actions/workflows/release.yml"><img src="https://github.com/giuseppegambino92/WarpDrop/actions/workflows/release.yml/badge.svg" alt="Build della release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/giuseppegambino92/WarpDrop" alt="Licenza: MIT"></a>
+</p>
+
+WarpDrop invia file, intere cartelle e il contenuto degli appunti da un dispositivo all'altro. I tuoi
+dispositivi ricevono con un clic; con chiunque altro basta condividere un codice a 6 cifre o un QR code,
+senza account né registrazioni. Sceglie da solo la strada più veloce (cavo USB, rete locale, oppure Internet tramite un server relay che puoi ospitare tu),
+cifra tutto end-to-end e, se il trasferimento si interrompe, riprende da dove si era fermato.
 
 <p align="center">
   <img src="docs/screenshots/macos.png" alt="WarpDrop su macOS" width="720">
 </p>
+
+## Download
+
+Ultima versione: **[WarpDrop 1.0.1](https://github.com/giuseppegambino92/WarpDrop/releases/latest)** (le versioni successive, quando usciranno, saranno sempre su quella pagina).
+
+| Piattaforma | Download | Note |
+|---|---|---|
+| macOS 14+ (Apple silicon e Intel) | [WarpDrop-1.0.1-macOS.dmg](https://github.com/giuseppegambino92/WarpDrop/releases/download/v1.0.1/WarpDrop-1.0.1-macOS.dmg) | Finestra + goccia nella barra dei menu (trascina i file sull'icona). Firmato con Developer ID e notarizzato da Apple. |
+| Windows 10/11 (x64) | [Installer (.exe)](https://github.com/giuseppegambino92/WarpDrop/releases/download/v1.0.1/WarpDrop_1.0.1_x64-setup.exe) · [MSI italiano](https://github.com/giuseppegambino92/WarpDrop/releases/download/v1.0.1/WarpDrop_1.0.1_x64_it-IT.msi) · [MSI English](https://github.com/giuseppegambino92/WarpDrop/releases/download/v1.0.1/WarpDrop_1.0.1_x64_en-US.msi) | Installa WebView2 se necessario. |
+| Linux (x86_64) | [.deb](https://github.com/giuseppegambino92/WarpDrop/releases/download/v1.0.1/WarpDrop_1.0.1_amd64.deb) · [.AppImage](https://github.com/giuseppegambino92/WarpDrop/releases/download/v1.0.1/WarpDrop_1.0.1_amd64.AppImage) | Rendi eseguibile l'AppImage con `chmod +x`. |
+| Android 11+ | [WarpDrop-1.0.1-android.apk](https://github.com/giuseppegambino92/WarpDrop/releases/download/v1.0.1/WarpDrop-1.0.1-android.apk) | Consenti l'installazione dal browser o dall'app File. |
+| iOS / iPadOS 17+ | [compilazione da sorgente](#compilare-dal-sorgente) (Xcode) | La distribuzione via App Store / TestFlight richiede un account Apple Developer. |
+| Server di rendezvous | [warp-signal-linux-x86_64.tar.gz](https://github.com/giuseppegambino92/WarpDrop/releases/download/v1.0.1/warp-signal-linux-x86_64.tar.gz) | Facoltativo: serve per usare i codici tra reti diverse (include anche la CLI `warp`). |
+
+Ogni release include [`SHA256SUMS.txt`](https://github.com/giuseppegambino92/WarpDrop/releases/download/v1.0.1/SHA256SUMS.txt).
 
 <p align="center">
   <img src="docs/screenshots/ios.png" alt="WarpDrop su iPhone" height="420">
@@ -28,27 +52,12 @@
 
 ## Perché WarpDrop
 
-- **Meglio di AirDrop, su ogni sistema.** I tuoi dispositivi compaiono in *I miei dispositivi* e ricevono con un clic, senza conferme. Per tutti gli altri basta un **codice a 6 cifre** (`482-910`) o un QR code: niente account, niente registrazioni.
+- **Condivisione stile AirDrop su ogni sistema.** I tuoi dispositivi compaiono in *I miei dispositivi* e ricevono con un clic, senza conferme. Per tutti gli altri basta un **codice a 6 cifre** (`482-910`) o un QR code: niente account, niente registrazioni.
 - **Sempre la strada più veloce.** Prima il cavo USB o Thunderbolt (⚡), poi Wi-Fi Direct/AWDL, Ethernet e Wi-Fi, infine Internet (P2P diretto o relay cifrato end-to-end).
 - **Cartelle senza zip.** I file viaggiano in streaming, compressi solo quando serve e verificati con BLAKE3 blocco per blocco.
 - **Riprende da solo.** Stacchi il cavo al 94 %? WarpDrop si riconnette su qualsiasi percorso disponibile, anche via Internet, e invia solo la parte mancante. Nessun nuovo codice, nessuna conferma.
 - **Appunti universali.** `⌘V` / `Ctrl+V` nella finestra invia testo, link e immagini agli appunti dell'altro dispositivo.
 - **Italiano e inglese** ovunque: segue la lingua di sistema, con la possibilità di cambiarla nell'app.
-
-## Download
-
-Ultima versione: **[Release → latest](../../releases/latest)**
-
-| Piattaforma | File | Note |
-|---|---|---|
-| macOS 14+ (Apple silicon e Intel) | `WarpDrop-<versione>-macOS.dmg` | Finestra + goccia nella barra dei menu (trascina i file sull'icona). Firmato con Developer ID e notarizzato da Apple. |
-| Windows 10/11 (x64) | `WarpDrop_<versione>_x64-setup.exe` oppure `WarpDrop_<versione>_x64_it-IT.msi` / `_en-US.msi` | Installa WebView2 se necessario. |
-| Linux (x86_64) | `WarpDrop_<versione>_amd64.deb` oppure `WarpDrop_<versione>_amd64.AppImage` | Rendi eseguibile l'AppImage con `chmod +x`. |
-| Android 11+ | `WarpDrop-<versione>-android*.apk` | Consenti l'installazione dal browser o dall'app File. |
-| iOS / iPadOS 17+ | compilazione da sorgente (Xcode) | La distribuzione via App Store / TestFlight richiede un account Apple Developer. |
-| Server di rendezvous | `warp-signal-linux-x86_64.tar.gz` | Facoltativo: serve per usare i codici tra reti diverse (include anche la CLI `warp`). |
-
-Ogni release include `SHA256SUMS.txt`.
 
 ## Come si usa
 
